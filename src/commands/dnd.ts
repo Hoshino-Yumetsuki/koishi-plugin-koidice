@@ -1,0 +1,26 @@
+import type { Context } from 'koishi'
+import type { Config } from '../config'
+import type { DiceAdapter } from '../wasm'
+import { logger } from '../index'
+
+/**
+ * DND人物作成命令 .dnd
+ */
+export function registerDNDGeneratorCommand(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
+  ctx.command('dnd [count:number]', 'DND人物作成')
+    .action(async ({ session }, count = 1) => {
+      // 限制生成数量
+      const maxCount = 10
+      if (count < 1 || count > maxCount) {
+        return `生成数量必须在1-${maxCount}之间`
+      }
+      
+      try {
+        const result = diceAdapter.generateDND(count)
+        return `${session.username} 的DND人物:\n${result}`
+      } catch (error) {
+        logger.error('DND人物作成错误:', error)
+        return 'DND人物作成时发生错误'
+      }
+    })
+}

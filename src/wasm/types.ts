@@ -19,9 +19,23 @@ export interface COCCheckResult {
   errorMsg: string
 }
 
+/**
+ * 暗骰结果
+ */
 export interface HiddenRollResult {
   success: boolean
   errorCode: number
+  errorMsg: string
+}
+
+/**
+ * 理智检定结果
+ */
+export interface SanityCheckResult {
+  success: boolean
+  rollValue: number
+  sanLoss: number
+  newSan: number
   errorMsg: string
 }
 
@@ -51,6 +65,14 @@ export interface DiceModule {
   hiddenRoll(expression: string, defaultDice?: number): HiddenRollResult
   getMaxValue(expression: string, defaultDice?: number): number
   getMinValue(expression: string, defaultDice?: number): number
+  
+  // 人物作成功能
+  generateCOC7Character(): string
+  generateCOC6Character(): string
+  generateDNDCharacter(count?: number): string
+  
+  // 理智检定功能
+  sanityCheck(currentSan: number, successLoss: string, failureLoss: string): SanityCheckResult
 
   // 牌堆功能
   drawCard(deckName: string, count?: number): DeckDrawResult

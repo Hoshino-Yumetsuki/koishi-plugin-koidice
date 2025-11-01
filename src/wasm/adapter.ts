@@ -1,4 +1,10 @@
-import type { DiceModule, RollResult, COCCheckResult } from './types'
+import type {
+  DiceModule,
+  RollResult,
+  COCCheckResult,
+  DeckDrawResult,
+  SanityCheckResult,
+} from './types'
 import { SuccessLevel } from './types'
 import { loadDiceWasm } from './loader'
 
@@ -144,6 +150,46 @@ export class DiceAdapter {
   getVersion(): string {
     const module = this.ensureModule()
     return module.getVersion()
+  }
+
+  // ============ 人物作成功能 ============
+
+  /**
+   * COC7版人物作成
+   */
+  generateCOC7(): string {
+    const module = this.ensureModule()
+    return module.generateCOC7Character()
+  }
+
+  /**
+   * COC6版人物作成
+   */
+  generateCOC6(): string {
+    const module = this.ensureModule()
+    return module.generateCOC6Character()
+  }
+
+  /**
+   * DND人物作成
+   * @param count 生成数量
+   */
+  generateDND(count = 1): string {
+    const module = this.ensureModule()
+    return module.generateDNDCharacter(count)
+  }
+
+  // ============ 理智检定功能 ============
+
+  /**
+   * 理智检定 (Sanity Check)
+   * @param currentSan 当前理智值
+   * @param successLoss 成功时损失表达式 (如 "0" 或 "1")
+   * @param failureLoss 失败时损失表达式 (如 "1d6" 或 "1d10")
+   */
+  sanityCheck(currentSan: number, successLoss: string, failureLoss: string): SanityCheckResult {
+    const module = this.ensureModule()
+    return module.sanityCheck(currentSan, successLoss, failureLoss)
   }
 
   /**
