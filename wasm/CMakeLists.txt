@@ -68,6 +68,10 @@ set(DICE_CORE_SOURCES
     
     # 牌堆系统
     ../Dice/Dice/CardDeck.cpp
+    
+    # 规则系统
+    ../Dice/Dice/GetRule.cpp
+    ../Dice/Dice/DiceRule.cpp
 )
 
 # WASM接口源文件
@@ -78,6 +82,7 @@ set(WASM_SOURCES
     src/dice_insanity.cpp
     src/dice_initiative.cpp
     src/dice_deck.cpp
+    src/dice_rule.cpp
 )
 
 # 创建WASM库

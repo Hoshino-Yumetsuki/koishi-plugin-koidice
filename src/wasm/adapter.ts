@@ -127,6 +127,27 @@ export class DiceAdapter {
     return module.deckExists(deckName)
   }
 
+  // ============ 规则查询功能 ============
+
+  /**
+   * 查询规则
+   * @param query 查询字符串 (支持 "system:keyword" 格式)
+   */
+  queryRule(query: string): string {
+    const module = this.ensureModule()
+    return module.queryRule(query)
+  }
+
+  /**
+   * 按系统查询规则
+   * @param system 系统名称 (coc/dnd/等)
+   * @param keyword 关键词
+   */
+  queryRuleWithSystem(system: string, keyword: string): string {
+    const module = this.ensureModule()
+    return module.queryRuleWithSystem(system, keyword)
+  }
+
   /**
    * 创建角色卡
    */

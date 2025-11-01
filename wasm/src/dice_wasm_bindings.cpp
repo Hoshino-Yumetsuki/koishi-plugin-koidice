@@ -5,6 +5,7 @@
 #include "dice_insanity.h"
 #include "dice_initiative.h"
 #include "dice_deck.h"
+#include "dice_rule.h"
 
 using namespace emscripten;
 
@@ -59,6 +60,10 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("listDecks", &listDecks);
     function("getDeckSize", &getDeckSize);
     function("deckExists", &deckExists);
+    
+    // 规则查询功能
+    function("queryRule", &queryRule);
+    function("queryRuleWithSystem", &queryRuleWithSystem);
     
     // 工具函数
     function("initialize", &initialize);

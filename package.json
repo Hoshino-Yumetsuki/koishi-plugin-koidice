@@ -22,8 +22,7 @@
     "build:wasm": "pwsh -File ./scripts/build-wasm.ps1",
     "build:wasm:clean": "pwsh -File ./scripts/build-wasm.ps1 -Clean",
     "build:ts": "yarn rolldown -c rolldown.config.js",
-    "build": "yarn build:ts",
-    "build:all": "yarn build:wasm && yarn build:ts",
+    "build": "yarn build:wasm && yarn build:ts",
     "publish": "yarn npm publish",
     "lint": "biome check && biome lint",
     "lint-fix": "biome format --write && biome lint --write"

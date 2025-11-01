@@ -119,6 +119,10 @@ export interface DiceModule {
   listDecks(): string
   getDeckSize(deckName: string): number
   deckExists(deckName: string): boolean
+  
+  // 规则查询功能
+  queryRule(query: string): string
+  queryRuleWithSystem(system: string, keyword: string): string
 
   // 角色卡功能
   createCharacter(characterName: string): boolean

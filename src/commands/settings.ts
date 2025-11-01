@@ -69,7 +69,7 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
         }
         
         if (dice < 2 || dice > 1000) {
-          return '骰子面数必须在 2-1000 之间喵~'
+          return '骰子面数必须在 2-1000 之间'
         }
         
         settings.defaultDice = dice
@@ -77,7 +77,7 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
         return `已设置默认骰为 D${dice}`
       } catch (error) {
         logger.error('设置默认骰错误:', error)
-        return '设置失败喵~'
+        return '设置失败'
       }
     })
 
@@ -103,7 +103,7 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
         }
         
         if (rule < 0 || rule > 5) {
-          return 'COC房规必须在 0-5 之间喵~\n0=规则书 1=出1大成功出100大失败 2=困难极难大成功 3=1-5大成功96-100大失败 4=困难极难大成功(满50) 5=困难极难大失败'
+          return 'COC房规必须在 0-5 之间\n0=规则书 1=出1大成功出100大失败 2=困难极难大成功 3=1-5大成功96-100大失败 4=困难极难大成功(满50) 5=困难极难大失败'
         }
         
         settings.cocRule = rule
@@ -111,7 +111,7 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
         return `已设置COC房规为 ${rule}`
       } catch (error) {
         logger.error('设置COC房规错误:', error)
-        return '设置失败喵~'
+        return '设置失败'
       }
     })
 
@@ -142,7 +142,7 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
         nickname = nickname.replace(/^[.!！。]/, '')
         
         if (nickname.length > 20) {
-          return '昵称长度不能超过20个字符喵~'
+          return '昵称长度不能超过20个字符'
         }
         
         settings.nickname = nickname
@@ -150,7 +150,7 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
         return `已设置昵称为: ${nickname}`
       } catch (error) {
         logger.error('设置昵称错误:', error)
-        return '设置失败喵~'
+        return '设置失败'
       }
     })
 }

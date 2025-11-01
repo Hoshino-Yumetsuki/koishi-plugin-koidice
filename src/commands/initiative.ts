@@ -60,7 +60,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
   parent.subcommand('init <name:text> [initiative:number]', '添加先攻')
     .action(async ({ session }, name, initiative) => {
       if (!name) {
-        return '请指定名称喵~'
+        return '请指定名称'
       }
 
       try {
@@ -81,7 +81,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         
         // 添加到WASM先攻列表
         if (!diceAdapter.addInitiative(channelId, name, initValue)) {
-          return '添加先攻失败喵~'
+          return '添加先攻失败'
         }
 
         // 保存
@@ -91,7 +91,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         return `已添加 ${name} 到先攻列表，先攻值: ${initValue}\n\n${list}`
       } catch (error) {
         logger.error('添加先攻错误:', error)
-        return '添加先攻时发生错误喵~'
+        return '添加先攻时发生错误'
       }
     })
 
@@ -108,13 +108,13 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         const count = diceAdapter.getInitiativeCount(channelId)
         
         if (count === 0) {
-          return '当前没有先攻列表喵~'
+          return '当前没有先攻列表'
         }
 
         return diceAdapter.getInitiativeList(channelId)
       } catch (error) {
         logger.error('显示先攻列表错误:', error)
-        return '显示先攻列表时发生错误喵~'
+        return '显示先攻列表时发生错误'
       }
     })
 
@@ -136,11 +136,11 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
           } catch {}
           return '已清空先攻列表'
         } else {
-          return '没有要清空的先攻列表喵~'
+          return '没有要清空的先攻列表'
         }
       } catch (error) {
         logger.error('清空先攻列表错误:', error)
-        return '清空先攻列表时发生错误喵~'
+        return '清空先攻列表时发生错误'
       }
     })
 
@@ -149,7 +149,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
     .alias('init.rm')
     .action(async ({ session }, name) => {
       if (!name) {
-        return '请指定要移除的名称喵~'
+        return '请指定要移除的名称'
       }
 
       try {
@@ -159,11 +159,11 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         loadInitiative(channelId, diceAdapter)
         
         if (diceAdapter.getInitiativeCount(channelId) === 0) {
-          return '当前没有先攻列表喵~'
+          return '当前没有先攻列表'
         }
 
         if (!diceAdapter.removeInitiative(channelId, name)) {
-          return `未找到 ${name} 喵~`
+          return `未找到 ${name} `
         }
 
         const count = diceAdapter.getInitiativeCount(channelId)
@@ -186,7 +186,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         return `已移除 ${name}\n\n${list}`
       } catch (error) {
         logger.error('移除先攻条目错误:', error)
-        return '移除先攻条目时发生错误喵~'
+        return '移除先攻条目时发生错误'
       }
     })
 
@@ -201,13 +201,13 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         loadInitiative(channelId, diceAdapter)
         
         if (diceAdapter.getInitiativeCount(channelId) === 0) {
-          return '当前没有先攻列表喵~'
+          return '当前没有先攻列表'
         }
 
         const result = diceAdapter.nextInitiativeTurn(channelId)
         
         if (!result.success) {
-          return result.message || '切换回合失败喵~'
+          return result.message || '切换回合失败'
         }
         
         // 保存
@@ -217,7 +217,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         return `轮到 ${result.currentName} 行动！\n\n${list}`
       } catch (error) {
         logger.error('下一回合错误:', error)
-        return '切换回合时发生错误喵~'
+        return '切换回合时发生错误'
       }
     })
 
@@ -235,7 +235,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         const result = diceAdapter.rollInitiative(channelId, name, modifier)
         
         if (!result.success) {
-          return result.message || '先攻检定失败喵~'
+          return result.message || '先攻检定失败'
         }
 
         // 保存
@@ -245,7 +245,7 @@ export function registerInitiativeCommands(parent: Command, config: Config, dice
         return `${name} 的先攻检定: ${result.detail}\n\n${list}`
       } catch (error) {
         logger.error('快速先攻错误:', error)
-        return '先攻检定时发生错误喵~'
+        return '先攻检定时发生错误'
       }
     })
 }

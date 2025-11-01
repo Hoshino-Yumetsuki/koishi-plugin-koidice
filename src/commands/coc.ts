@@ -61,7 +61,7 @@ export function registerGrowthCommand(parent: Command, config: Config, diceAdapt
         const currentValue = getCharacterAttribute(characterName, String(skill))
         
         if (currentValue < 0) {
-          return `未找到技能 ${skill}，请先使用 .st.set ${skill} <值> 设置喵~`
+          return `未找到技能 ${skill}，请先使用 .st.set ${skill} <值> 设置`
         }
 
         // 成长检定: 1d100 > 当前技能值
@@ -150,7 +150,7 @@ export function registerSanityCheckCommand(parent: Command, config: Config, dice
           currentSan = getCharacterAttribute(characterName, 'san')
           
           if (currentSan < 0) {
-            return '未设定SAN值，请使用 -s 参数指定或先 .st.set san <值> 喵~'
+            return '未设定SAN值，请使用 -s 参数指定或先 .st.set san <值> '
           }
         }
         

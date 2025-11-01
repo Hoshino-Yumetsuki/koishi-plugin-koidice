@@ -1,6 +1,8 @@
 import { type Context, Logger, Schema } from 'koishi'
 import type { Config } from './config'
 import { initializeDiceAdapter, registerCommands } from './commands'
+import { clearAllObservers } from './commands/observer'
+import { getDiceWasmLoader } from './wasm/loader'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -40,7 +42,21 @@ export async function apply(ctx: Context, config: Config) {
 
   // 清理资源
   ctx.on('dispose', () => {
-    logger.info('Dice插件卸载')
+    logger.info('开始卸载 Dice 插件...')
+    
+    try {
+      // 清理旁观者列表
+      clearAllObservers()
+      logger.debug('已清理旁观者数据')
+      
+      // 卸载 WASM 模块
+      getDiceWasmLoader().unload()
+      logger.debug('已卸载 WASM 模块')
+      
+      logger.info('Dice 插件卸载完成')
+    } catch (error) {
+      logger.error('插件卸载时发生错误:', error)
+    }
   })
 }
 

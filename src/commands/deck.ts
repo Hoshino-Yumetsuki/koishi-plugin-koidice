@@ -12,22 +12,22 @@ export function registerDeckCommands(parent: Command, config: Config, diceAdapte
     .alias('deck')
     .action(async ({ session }, deckName, count = 1) => {
       if (!deckName) {
-        return '请指定牌堆名称喵~'
+        return '请指定牌堆名称'
       }
 
       if (count < 1 || count > 10) {
-        return '抽取数量必须在1-10之间喵~'
+        return '抽取数量必须在1-10之间'
       }
 
       try {
         const result = diceAdapter.drawFromDeck(deckName, count)
         
         if (!result.success) {
-          return result.message || '抽卡失败喵~'
+          return result.message || '抽卡失败'
         }
         
         if (result.cards.length === 0) {
-          return `牌堆 ${deckName} 已空或不存在喵~`
+          return `牌堆 ${deckName} 已空或不存在`
         }
         
         return `从牌堆 ${deckName} 抽取了: ${result.cards.join(', ')}`
@@ -44,7 +44,7 @@ export function registerDeckCommands(parent: Command, config: Config, diceAdapte
         return diceAdapter.listDecks()
       } catch (error) {
         logger.error('列出牌堆错误:', error)
-        return '获取牌堆列表失败喵~'
+        return '获取牌堆列表失败'
       }
     })
 }

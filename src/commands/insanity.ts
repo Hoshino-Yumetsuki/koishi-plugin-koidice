@@ -21,7 +21,7 @@ export function registerInsanityCommands(parent: Command, config: Config, diceAd
         let symptom = diceAdapter.getTempInsanity(symptomType)
         
         if (!symptom || symptom.includes('索引超出范围')) {
-          return '症状表索引错误喵~'
+          return '症状表索引错误'
         }
         
         // 1d10 决定持续时间（轮数）
@@ -54,7 +54,7 @@ export function registerInsanityCommands(parent: Command, config: Config, diceAd
         return `${session.username} 的临时疯狂症状:\n${symptom}`
       } catch (error) {
         logger.error('临时疯狂症状错误:', error)
-        return '生成临时疯狂症状时发生错误喵~'
+        return '生成临时疯狂症状时发生错误'
       }
     })
 
@@ -72,7 +72,7 @@ export function registerInsanityCommands(parent: Command, config: Config, diceAd
         let symptom = diceAdapter.getLongInsanity(symptomType)
         
         if (!symptom || symptom.includes('索引超出范围')) {
-          return '症状表索引错误喵~'
+          return '症状表索引错误'
         }
         
         // 1d10 决定持续时间（小时）
@@ -105,7 +105,7 @@ export function registerInsanityCommands(parent: Command, config: Config, diceAd
         return `${session.username} 的永久/不定疯狂症状:\n${symptom}`
       } catch (error) {
         logger.error('永久疯狂症状错误:', error)
-        return '生成永久疯狂症状时发生错误喵~'
+        return '生成永久疯狂症状时发生错误'
       }
     })
 }

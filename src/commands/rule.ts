@@ -2,10 +2,17 @@ import type { Context, Command } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
-import { getRule, listRules, type RuleEntry } from '../data/rules'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getDataPath } from '../utils/path'
+
+/**
+ * 规则条目
+ */
+interface RuleEntry {
+  name: string
+  content: string
+}
 
 /**
  * 远程规则数据
@@ -181,18 +188,15 @@ export function registerRuleCommands(parent: Command, config: Config, diceAdapte
           if (result) {
             return `规则库已更新\n版本: ${result.version}\n更新时间: ${new Date(result.lastUpdate).toLocaleString('zh-CN')}`
           } else {
-            return '更新失败，请检查网络连接喵~'
+            return '更新失败，请检查网络连接'
           }
         }
         
         // 列出规则
         if (query.toLowerCase() === 'list') {
-          const coc = listRules('coc')
-          const dnd = listRules('dnd')
-          
-          let result = `=== 内置规则 ===\n`
-          result += `COC: ${coc.join(', ')}\n`
-          result += `DND: ${dnd.join(', ')}\n`
+          let result = `=== Dice! 内置规则 ===\n`
+          result += `支持系统: COC, DND, FATE, WOD 等\n`
+          result += `使用 .rule <关键词> 或 .rule <系统>:<关键词> 查询\n`
           
           // 显示远程规则信息
           const remoteData = getRulesData()
@@ -218,13 +222,24 @@ export function registerRuleCommands(parent: Command, config: Config, diceAdapte
           keyword = parts[1].trim()
         }
         
-        // 先查询内置规则
-        let rule = getRule(system, keyword)
-        
-        // 如果没找到，查询远程规则
-        if (!rule) {
-          rule = findRemoteRule(system, keyword)
+        // 1. 先尝试 WASM 查询 (Dice! 内置规则)
+        let wasmResult = ''
+        try {
+          if (system) {
+            wasmResult = diceAdapter.queryRuleWithSystem(system, keyword)
+          } else {
+            wasmResult = diceAdapter.queryRule(keyword)
+          }
+        } catch (error) {
+          logger.debug('WASM规则查询失败:', error)
         }
+        
+        if (wasmResult) {
+          return `【${keyword}】\n${wasmResult}`
+        }
+        
+        // 2. 查询远程规则缓存
+        const rule = findRemoteRule(system, keyword)
         
         if (!rule) {
           return `未找到规则: ${keyword}\n使用 .rule list 查看所有规则\n或使用 .rule update 更新远程规则库`
@@ -233,7 +248,7 @@ export function registerRuleCommands(parent: Command, config: Config, diceAdapte
         return `【${rule.name}】\n${rule.content}`
       } catch (error) {
         logger.error('规则速查错误:', error)
-        return '查询失败喵~'
+        return '查询失败'
       }
     })
   

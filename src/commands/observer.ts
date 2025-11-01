@@ -23,7 +23,7 @@ export function registerObserverCommands(parent: Command, config: Config, diceAd
       const userId = session.userId
       
       if (!channelId) {
-        return '旁观模式仅在群聊中可用喵~'
+        return '旁观模式仅在群聊中可用'
       }
       
       try {
@@ -41,7 +41,7 @@ export function registerObserverCommands(parent: Command, config: Config, diceAd
         switch (lowerAction) {
           case 'join': {
             if (!observerMode.get(channelId)) {
-              return '本桌旁观模式未开启喵~'
+              return '本桌旁观模式未开启'
             }
             
             if (!observers.has(channelId)) {
@@ -54,7 +54,7 @@ export function registerObserverCommands(parent: Command, config: Config, diceAd
           case 'exit': {
             const channelObservers = observers.get(channelId)
             if (!channelObservers || !channelObservers.has(userId)) {
-              return '你不在旁观列表中喵~'
+              return '你不在旁观列表中'
             }
             channelObservers.delete(userId)
             return `${session.username} 已退出旁观`
@@ -86,11 +86,11 @@ export function registerObserverCommands(parent: Command, config: Config, diceAd
           }
           
           default:
-            return '未知操作喵~ 使用 .ob 查看帮助'
+            return '未知操作 使用 .ob 查看帮助'
         }
       } catch (error) {
         logger.error('旁观模式错误:', error)
-        return '操作失败喵~'
+        return '操作失败'
       }
     })
 }
@@ -116,4 +116,12 @@ export function getObservers(channelId: string): string[] {
  */
 export function isObserverModeEnabled(channelId: string): boolean {
   return observerMode.get(channelId) ?? false
+}
+
+/**
+ * 清理所有旁观者数据 (插件卸载时调用)
+ */
+export function clearAllObservers(): void {
+  observers.clear()
+  observerMode.clear()
 }
