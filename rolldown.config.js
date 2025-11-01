@@ -14,12 +14,12 @@ export default defineConfig([
   {
     ...config,
     output: [{ file: 'lib/index.mjs', format: 'es', minify: true }],
-    external: external,
+    external: external
   },
   {
     ...config,
     output: [{ file: 'lib/index.cjs', format: 'cjs', minify: true }],
-    external: external,
+    external: external
   },
   {
     ...config,

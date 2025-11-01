@@ -5,7 +5,7 @@ import type {
   DeckDrawResult,
   SanityCheckResult,
   InitiativeRollResult,
-  InitiativeTurnResult,
+  InitiativeTurnResult
 } from './types'
 import { SuccessLevel } from './types'
 import { loadDiceWasm } from './loader'
@@ -32,7 +32,9 @@ export class DiceAdapter {
    */
   private ensureModule(): DiceModule {
     if (!this.module) {
-      throw new Error('Dice WASM module not initialized. Call initialize() first.')
+      throw new Error(
+        'Dice WASM module not initialized. Call initialize() first.'
+      )
     }
     return this.module
   }
@@ -159,7 +161,11 @@ export class DiceAdapter {
   /**
    * 设置角色属性
    */
-  setCharacterAttr(characterName: string, attrName: string, value: number): boolean {
+  setCharacterAttr(
+    characterName: string,
+    attrName: string,
+    value: number
+  ): boolean {
     const module = this.ensureModule()
     return module.setCharacterAttr(characterName, attrName, value)
   }
@@ -223,7 +229,11 @@ export class DiceAdapter {
    * @param successLoss 成功时损失表达式 (如 "0" 或 "1")
    * @param failureLoss 失败时损失表达式 (如 "1d6" 或 "1d10")
    */
-  sanityCheck(currentSan: number, successLoss: string, failureLoss: string): SanityCheckResult {
+  sanityCheck(
+    currentSan: number,
+    successLoss: string,
+    failureLoss: string
+  ): SanityCheckResult {
     const module = this.ensureModule()
     return module.sanityCheck(currentSan, successLoss, failureLoss)
   }
@@ -280,7 +290,11 @@ export class DiceAdapter {
   /**
    * 先攻检定
    */
-  rollInitiative(channelId: string, name: string, modifier: number = 0): InitiativeRollResult {
+  rollInitiative(
+    channelId: string,
+    name: string,
+    modifier: number = 0
+  ): InitiativeRollResult {
     const module = this.ensureModule()
     return module.rollInitiative(channelId, name, modifier)
   }
@@ -351,7 +365,7 @@ export class DiceAdapter {
       [SuccessLevel.Success]: '成功',
       [SuccessLevel.HardSuccess]: '困难成功',
       [SuccessLevel.ExtremeSuccess]: '极难成功',
-      [SuccessLevel.CriticalSuccess]: '大成功',
+      [SuccessLevel.CriticalSuccess]: '大成功'
     }
     return levelNames[level] || '未知'
   }
@@ -376,7 +390,10 @@ export class DiceAdapter {
   /**
    * 格式化COC检定结果为消息文本
    */
-  static formatCOCCheckResult(result: COCCheckResult, skillName?: string): string {
+  static formatCOCCheckResult(
+    result: COCCheckResult,
+    skillName?: string
+  ): string {
     if (result.errorCode !== 0) {
       return `检定失败: ${result.errorMsg}`
     }

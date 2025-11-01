@@ -8,12 +8,21 @@
     "defaultBranch": "main"
   },
   "files": {
-    "ignoreUnknown": false,
-    "experimentalScannerIgnores": [
-      "*.lock"
-    ],
+    "ignoreUnknown": true,
     "includes": [
-      "**"
+      "**",
+      "!Dice",
+      "!wasm/build",
+      "!wasm/dice.js",
+      "!wasm/dice.wasm",
+      "!lib",
+      "!node_modules",
+      "!*.lock"
+    ],
+    "experimentalScannerIgnores": [
+      "Dice",
+      "node_modules",
+      "lib"
     ]
   },
   "formatter": {

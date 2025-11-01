@@ -6,15 +6,20 @@ import { logger } from '../index'
 /**
  * DND人物作成命令 .dnd
  */
-export function registerDNDGeneratorCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
-  parent.subcommand('dnd [count:number]', 'DND人物作成')
+export function registerDNDGeneratorCommand(
+  parent: Command,
+  _config: Config,
+  diceAdapter: DiceAdapter
+) {
+  parent
+    .subcommand('dnd [count:number]', 'DND人物作成')
     .action(async ({ session }, count = 1) => {
       // 限制生成数量
       const maxCount = 10
       if (count < 1 || count > maxCount) {
         return `生成数量必须在1-${maxCount}之间`
       }
-      
+
       try {
         const result = diceAdapter.generateDND(count)
         return `${session.username} 的DND人物:\n${result}`

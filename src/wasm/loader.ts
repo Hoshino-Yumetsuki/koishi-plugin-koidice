@@ -43,7 +43,7 @@ export class DiceWasmLoader {
       const createModule = await this.importModuleFactory(jsPath)
 
       // 读取WASM二进制
-      const wasmBinary = await readFile(wasmPath)
+      const _wasmBinary = await readFile(wasmPath)
 
       // 创建模块实例
       const module = await createModule()
@@ -73,12 +73,16 @@ export class DiceWasmLoader {
   /**
    * 动态导入模块工厂
    */
-  private async importModuleFactory(jsPath: string): Promise<EmscriptenModuleFactory> {
+  private async importModuleFactory(
+    jsPath: string
+  ): Promise<EmscriptenModuleFactory> {
     try {
       const module = await import(jsPath)
       return module.default || module
     } catch (error) {
-      throw new Error(`Failed to import module factory from ${jsPath}: ${error.message}`)
+      throw new Error(
+        `Failed to import module factory from ${jsPath}: ${error.message}`
+      )
     }
   }
 

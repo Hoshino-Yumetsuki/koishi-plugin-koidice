@@ -53,25 +53,30 @@ function saveSettings(userId: string, settings: UserSettings): void {
 /**
  * 设置命令 .set / .setcoc / .nn
  */
-export function registerSettingsCommands(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+export function registerSettingsCommands(
+  parent: Command,
+  _config: Config,
+  _diceAdapter: DiceAdapter
+) {
   // 设置默认骰
-  parent.subcommand('set [dice:number]', '设置默认骰面数')
+  parent
+    .subcommand('set [dice:number]', '设置默认骰面数')
     .action(async ({ session }, dice) => {
       try {
         const userId = session.userId
         const settings = loadSettings(userId)
-        
+
         if (dice === undefined) {
           // 重置为默认值
           delete settings.defaultDice
           saveSettings(userId, settings)
           return '已重置默认骰为 D100'
         }
-        
+
         if (dice < 2 || dice > 1000) {
           return '骰子面数必须在 2-1000 之间'
         }
-        
+
         settings.defaultDice = dice
         saveSettings(userId, settings)
         return `已设置默认骰为 D${dice}`
@@ -82,12 +87,13 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
     })
 
   // 设置COC房规
-  parent.subcommand('setcoc [rule:number]', '设置COC检定房规')
+  parent
+    .subcommand('setcoc [rule:number]', '设置COC检定房规')
     .action(async ({ session }, rule) => {
       try {
         const userId = session.userId
         const settings = loadSettings(userId)
-        
+
         if (rule === undefined) {
           // 显示当前房规
           const currentRule = settings.cocRule ?? 0
@@ -101,11 +107,11 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
           ]
           return `当前COC房规: ${currentRule}\n${ruleDesc[currentRule] || '未知房规'}\n\n使用 .setcoc <0-5> 设置房规`
         }
-        
+
         if (rule < 0 || rule > 5) {
           return 'COC房规必须在 0-5 之间\n0=规则书 1=出1大成功出100大失败 2=困难极难大成功 3=1-5大成功96-100大失败 4=困难极难大成功(满50) 5=困难极难大失败'
         }
-        
+
         settings.cocRule = rule
         saveSettings(userId, settings)
         return `已设置COC房规为 ${rule}`
@@ -116,12 +122,13 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
     })
 
   // 设置昵称
-  parent.subcommand('nn [nickname:text]', '设置昵称')
+  parent
+    .subcommand('nn [nickname:text]', '设置昵称')
     .action(async ({ session }, nickname) => {
       try {
         const userId = session.userId
         const settings = loadSettings(userId)
-        
+
         if (!nickname) {
           // 显示当前昵称
           if (settings.nickname) {
@@ -130,21 +137,21 @@ export function registerSettingsCommands(parent: Command, config: Config, diceAd
             return `当前昵称: ${session.username || '未设置'}`
           }
         }
-        
+
         if (nickname === 'del' || nickname === 'clr') {
           // 删除昵称
           delete settings.nickname
           saveSettings(userId, settings)
           return '已删除昵称设置'
         }
-        
+
         // 移除前导符号
         nickname = nickname.replace(/^[.!！。]/, '')
-        
+
         if (nickname.length > 20) {
           return '昵称长度不能超过20个字符'
         }
-        
+
         settings.nickname = nickname
         saveSettings(userId, settings)
         return `已设置昵称为: ${nickname}`

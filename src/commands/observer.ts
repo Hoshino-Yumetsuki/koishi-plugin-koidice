@@ -16,41 +16,48 @@ const observerMode = new Map<string, boolean>()
 /**
  * 旁观模式命令 .ob
  */
-export function registerObserverCommands(parent: Command, config: Config, diceAdapter: DiceAdapter) {
-  parent.subcommand('ob [action:text]', '旁观模式')
+export function registerObserverCommands(
+  parent: Command,
+  _config: Config,
+  _diceAdapter: DiceAdapter
+) {
+  parent
+    .subcommand('ob [action:text]', '旁观模式')
     .action(async ({ session }, action) => {
       const channelId = session.channelId
       const userId = session.userId
-      
+
       if (!channelId) {
         return '旁观模式仅在群聊中可用'
       }
-      
+
       try {
         if (!action) {
-          return '用法:\n' +
-                 '.ob join - 加入旁观\n' +
-                 '.ob exit - 退出旁观\n' +
-                 '.ob list - 查看旁观者\n' +
-                 '.ob clr - 清除所有旁观者\n' +
-                 '.ob on/off - 开启/关闭旁观模式'
+          return (
+            '用法:\n' +
+            '.ob join - 加入旁观\n' +
+            '.ob exit - 退出旁观\n' +
+            '.ob list - 查看旁观者\n' +
+            '.ob clr - 清除所有旁观者\n' +
+            '.ob on/off - 开启/关闭旁观模式'
+          )
         }
-        
+
         const lowerAction = action.toLowerCase()
-        
+
         switch (lowerAction) {
           case 'join': {
             if (!observerMode.get(channelId)) {
               return '本桌旁观模式未开启'
             }
-            
+
             if (!observers.has(channelId)) {
               observers.set(channelId, new Set())
             }
-            observers.get(channelId)!.add(userId)
+            observers.get(channelId)?.add(userId)
             return `${session.username} 已加入旁观`
           }
-          
+
           case 'exit': {
             const channelObservers = observers.get(channelId)
             if (!channelObservers || !channelObservers.has(userId)) {
@@ -59,32 +66,34 @@ export function registerObserverCommands(parent: Command, config: Config, diceAd
             channelObservers.delete(userId)
             return `${session.username} 已退出旁观`
           }
-          
+
           case 'list': {
             const channelObservers = observers.get(channelId)
             if (!channelObservers || channelObservers.size === 0) {
               return '当前没有旁观者'
             }
-            return `旁观者列表:\n${Array.from(channelObservers).map((id, i) => `${i + 1}. ${id}`).join('\n')}`
+            return `旁观者列表:\n${Array.from(channelObservers)
+              .map((id, i) => `${i + 1}. ${id}`)
+              .join('\n')}`
           }
-          
+
           case 'clr':
           case 'clear': {
             observers.delete(channelId)
             return '已清除所有旁观者'
           }
-          
+
           case 'on': {
             observerMode.set(channelId, true)
             return '已开启旁观模式'
           }
-          
+
           case 'off': {
             observerMode.set(channelId, false)
             observers.delete(channelId)
             return '已关闭旁观模式'
           }
-          
+
           default:
             return '未知操作 使用 .ob 查看帮助'
         }

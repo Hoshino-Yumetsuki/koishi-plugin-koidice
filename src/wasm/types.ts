@@ -75,7 +75,7 @@ export enum SuccessLevel {
   Success = 2,
   HardSuccess = 3,
   ExtremeSuccess = 4,
-  CriticalSuccess = 5,
+  CriticalSuccess = 5
 }
 
 /**
@@ -88,24 +88,32 @@ export interface DiceModule {
   hiddenRoll(expression: string, defaultDice?: number): HiddenRollResult
   getMaxValue(expression: string, defaultDice?: number): number
   getMinValue(expression: string, defaultDice?: number): number
-  
+
   // 人物作成功能
   generateCOC7Character(): string
   generateCOC6Character(): string
   generateDNDCharacter(count?: number): string
-  
+
   // 理智检定功能
-  sanityCheck(currentSan: number, successLoss: string, failureLoss: string): SanityCheckResult
-  
+  sanityCheck(
+    currentSan: number,
+    successLoss: string,
+    failureLoss: string
+  ): SanityCheckResult
+
   // 疯狂症状功能
   getTempInsanity(index: number): string
   getLongInsanity(index: number): string
   getPhobia(index: number): string
   getMania(index: number): string
-  
+
   // 先攻列表功能
   addInitiative(channelId: string, name: string, initiative: number): any
-  rollInitiative(channelId: string, name: string, modifier?: number): InitiativeRollResult
+  rollInitiative(
+    channelId: string,
+    name: string,
+    modifier?: number
+  ): InitiativeRollResult
   removeInitiative(channelId: string, name: string): boolean
   clearInitiative(channelId: string): boolean
   nextInitiativeTurn(channelId: string): InitiativeTurnResult
@@ -119,14 +127,18 @@ export interface DiceModule {
   listDecks(): string
   getDeckSize(deckName: string): number
   deckExists(deckName: string): boolean
-  
+
   // 规则查询功能
   queryRule(query: string): string
   queryRuleWithSystem(system: string, keyword: string): string
 
   // 角色卡功能
   createCharacter(characterName: string): boolean
-  setCharacterAttr(characterName: string, attrName: string, attrValue: number): boolean
+  setCharacterAttr(
+    characterName: string,
+    attrName: string,
+    attrValue: number
+  ): boolean
   getCharacterAttr(characterName: string, attrName: string): number
   deleteCharacter(characterName: string): boolean
 
@@ -138,6 +150,4 @@ export interface DiceModule {
 /**
  * Emscripten 模块工厂类型
  */
-export interface EmscriptenModuleFactory {
-  (): Promise<DiceModule>
-}
+export type EmscriptenModuleFactory = () => Promise<DiceModule>

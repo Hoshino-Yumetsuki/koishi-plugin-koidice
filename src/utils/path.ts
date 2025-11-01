@@ -8,12 +8,12 @@ import { existsSync, mkdirSync } from 'node:fs'
 export function getDataPath(): string {
   // Koishi 的数据目录通常在工作目录的 data 文件夹下
   const dataDir = resolve(process.cwd(), 'data', 'koidice')
-  
+
   // 确保目录存在
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
   }
-  
+
   return dataDir
 }
 
@@ -32,11 +32,11 @@ export function getConfigPath(filename: string): string {
  */
 export function getCharacterDataPath(): string {
   const charDir = resolve(getDataPath(), 'characters')
-  
+
   if (!existsSync(charDir)) {
     mkdirSync(charDir, { recursive: true })
   }
-  
+
   return charDir
 }
 
@@ -46,10 +46,10 @@ export function getCharacterDataPath(): string {
  */
 export function getDeckDataPath(): string {
   const deckDir = resolve(getDataPath(), 'decks')
-  
+
   if (!existsSync(deckDir)) {
     mkdirSync(deckDir, { recursive: true })
   }
-  
+
   return deckDir
 }

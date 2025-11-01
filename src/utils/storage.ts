@@ -23,11 +23,14 @@ function getCharacterFilePath(characterName: string): string {
 /**
  * 保存角色卡数据
  */
-export function saveCharacter(characterName: string, attributes: Record<string, number>): boolean {
+export function saveCharacter(
+  characterName: string,
+  attributes: Record<string, number>
+): boolean {
   try {
     const filePath = getCharacterFilePath(characterName)
     const now = Date.now()
-    
+
     let data: CharacterData
     if (existsSync(filePath)) {
       // 更新现有角色卡
@@ -36,7 +39,7 @@ export function saveCharacter(characterName: string, attributes: Record<string, 
         name: characterName,
         attributes: { ...existing?.attributes, ...attributes },
         createdAt: existing?.createdAt || now,
-        updatedAt: now,
+        updatedAt: now
       }
     } else {
       // 创建新角色卡
@@ -44,10 +47,10 @@ export function saveCharacter(characterName: string, attributes: Record<string, 
         name: characterName,
         attributes,
         createdAt: now,
-        updatedAt: now,
+        updatedAt: now
       }
     }
-    
+
     writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
     return true
   } catch (error) {
@@ -65,7 +68,7 @@ export function loadCharacter(characterName: string): CharacterData | null {
     if (!existsSync(filePath)) {
       return null
     }
-    
+
     const content = readFileSync(filePath, 'utf-8')
     return JSON.parse(content) as CharacterData
   } catch (error) {
@@ -101,11 +104,11 @@ export function listCharacters(): string[] {
     if (!existsSync(dataPath)) {
       return []
     }
-    
+
     const files = readdirSync(dataPath)
     return files
-      .filter(file => file.endsWith('.json'))
-      .map(file => file.replace('.json', ''))
+      .filter((file) => file.endsWith('.json'))
+      .map((file) => file.replace('.json', ''))
   } catch (error) {
     logger.error('列出角色卡失败:', error)
     return []
@@ -115,7 +118,10 @@ export function listCharacters(): string[] {
 /**
  * 获取角色卡属性
  */
-export function getCharacterAttribute(characterName: string, attrName: string): number {
+export function getCharacterAttribute(
+  characterName: string,
+  attrName: string
+): number {
   const character = loadCharacter(characterName)
   if (!character) {
     return -1
@@ -135,13 +141,16 @@ export function setCharacterAttribute(
   try {
     const character = loadCharacter(characterName)
     const attributes = character?.attributes || {}
-    
+
     // 检查属性数量限制
-    if (!attributes[attrName] && Object.keys(attributes).length >= maxAttributes) {
+    if (
+      !attributes[attrName] &&
+      Object.keys(attributes).length >= maxAttributes
+    ) {
       logger.warn(`角色卡 ${characterName} 属性数量已达上限 ${maxAttributes}`)
       return false
     }
-    
+
     attributes[attrName] = attrValue
     return saveCharacter(characterName, attributes)
   } catch (error) {
@@ -153,7 +162,9 @@ export function setCharacterAttribute(
 /**
  * 获取角色卡所有属性
  */
-export function getAllAttributes(characterName: string): Record<string, number> | null {
+export function getAllAttributes(
+  characterName: string
+): Record<string, number> | null {
   const character = loadCharacter(characterName)
   return character?.attributes || null
 }

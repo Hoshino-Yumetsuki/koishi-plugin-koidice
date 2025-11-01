@@ -7,8 +7,13 @@ import { logger } from '../index'
 /**
  * 掷骰命令 r / rh
  */
-export function registerRollCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
-  parent.subcommand('roll <expression:text>', '掷骰子')
+export function registerRollCommand(
+  parent: Command,
+  config: Config,
+  diceAdapter: DiceAdapter
+) {
+  parent
+    .subcommand('roll <expression:text>', '掷骰子')
     .alias('r')
     .alias('roll')
     .option('reason', '-r <reason:text> 掷骰原因')
@@ -20,12 +25,18 @@ export function registerRollCommand(parent: Command, config: Config, diceAdapter
 
       try {
         if (options.hidden) {
-          const success = diceAdapter.hiddenRoll(expression, config.defaultDice)
+          const _success = diceAdapter.hiddenRoll(
+            expression,
+            config.defaultDice
+          )
           return `${session.username} 进行了暗骰${options.reason ? ` (${options.reason})` : ''}`
         }
 
-        const result: RollResult = diceAdapter.roll(expression, config.defaultDice)
-        
+        const result: RollResult = diceAdapter.roll(
+          expression,
+          config.defaultDice
+        )
+
         if (result.errorCode !== 0) {
           return `掷骰失败: ${result.errorMsg}`
         }
@@ -34,14 +45,14 @@ export function registerRollCommand(parent: Command, config: Config, diceAdapter
         if (options.reason) {
           parts.push(options.reason)
         }
-        
+
         // 根据配置决定是否显示详细结果
         if (config.showDetail) {
           parts.push(result.detail)
         } else {
           parts.push(`结果: ${result.total}`)
         }
-        
+
         return parts.join(' ')
       } catch (error) {
         logger.error('掷骰错误:', error)
