@@ -1,0 +1,3 @@
+[submodule "Dice"]
+	path = Dice
+	url = https://github.com/Dice-Developer-Team/Dice.git

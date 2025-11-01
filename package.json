@@ -1,0 +1,58 @@
+{
+  "name": "koishi-plugin-koidice",
+  "description": "Dice! 的完整 Koishi 移植",
+  "version": "1.0.0-beta.1",
+  "main": "lib/index.cjs",
+  "module": "lib/index.mjs",
+  "types": "lib/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "require": "./lib/index.cjs",
+      "import": "./lib/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "wasm"
+  ],
+  "scripts": {
+    "build:wasm": "pwsh -File ./scripts/build-wasm.ps1",
+    "build:wasm:clean": "pwsh -File ./scripts/build-wasm.ps1 -Clean",
+    "build:ts": "yarn rolldown -c rolldown.config.js",
+    "build": "yarn build:ts",
+    "build:all": "yarn build:wasm && yarn build:ts",
+    "publish": "yarn npm publish",
+    "lint": "biome check && biome lint",
+    "lint-fix": "biome format --write && biome lint --write"
+  },
+  "license": "MPL-2.0",
+  "homepage": "https://github.com/Hoshino-Yumetsuki/koidice",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hoshino-Yumetsuki/koidice"
+  },
+  "keywords": [
+    "Dice!",
+    "koishi",
+    "plugin",
+    "koidice"
+  ],
+  "peerDependencies": {
+    "koishi": "^4.17.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.6",
+    "@types/node": "^24.7.2",
+    "koishi": "^4.18.9",
+    "rolldown": "1.0.0-beta.43",
+    "rolldown-plugin-dts": "^0.16.11"
+  },
+  "koishi": {
+    "description": {
+      "zh": "Dice! 的完整 Koishi 移植"
+    }
+  }
+}
