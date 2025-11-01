@@ -1,4 +1,4 @@
-import type { Context } from 'koishi'
+import type { Command } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
@@ -15,10 +15,10 @@ import {
 /**
  * 角色卡命令 .pc
  */
-export function registerCharacterCommands(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('pc', '角色卡管理')
+export function registerCharacterCommands(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('pc', '角色卡管理')
 
-  ctx.command('pc.new <name:text>', '创建角色卡')
+  parent.subcommand('pc.new <name:text>', '创建角色卡')
     .action(async ({ session }, name) => {
       if (!name) {
         return '请指定角色名称喵~'
@@ -40,7 +40,7 @@ export function registerCharacterCommands(ctx: Context, config: Config, diceAdap
       }
     })
 
-  ctx.command('pc.set <name:text> <attr:text> <value:number>', '设置角色属性')
+  parent.subcommand('pc.set <name:text> <attr:text> <value:number>', '设置角色属性')
     .action(async ({ session }, name, attr, value) => {
       if (!name || !attr || value === undefined) {
         return '参数不完整喵~ 用法: .pc.set <角色名> <属性名> <属性值>'
@@ -58,7 +58,7 @@ export function registerCharacterCommands(ctx: Context, config: Config, diceAdap
       }
     })
 
-  ctx.command('pc.get <name:text> <attr:text>', '查询角色属性')
+  parent.subcommand('pc.get <name:text> <attr:text>', '查询角色属性')
     .action(async ({ session }, name, attr) => {
       if (!name || !attr) {
         return '参数不完整喵~ 用法: .pc.get <角色名> <属性名>'
@@ -73,7 +73,7 @@ export function registerCharacterCommands(ctx: Context, config: Config, diceAdap
       }
     })
 
-  ctx.command('pc.del <name:text>', '删除角色卡')
+  parent.subcommand('pc.del <name:text>', '删除角色卡')
     .action(async ({ session }, name) => {
       if (!name) {
         return '请指定角色名称喵~'
@@ -88,7 +88,7 @@ export function registerCharacterCommands(ctx: Context, config: Config, diceAdap
       }
     })
 
-  ctx.command('pc.list', '列出所有角色卡')
+  parent.subcommand('pc.list', '列出所有角色卡')
     .action(async ({ session }) => {
       try {
         const characters = listCharacters()
@@ -102,7 +102,7 @@ export function registerCharacterCommands(ctx: Context, config: Config, diceAdap
       }
     })
 
-  ctx.command('pc.show <name:text>', '显示角色卡详情')
+  parent.subcommand('pc.show [name:text]', '查看角色卡详情')
     .action(async ({ session }, name) => {
       if (!name) {
         return '请指定角色名称喵~'
@@ -144,13 +144,13 @@ export function registerCharacterCommands(ctx: Context, config: Config, diceAdap
 /**
  * 属性设置命令 .st (COC)
  */
-export function registerAttributeCommands(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('st', '角色属性管理')
+export function registerAttributeCommands(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('st', '角色属性管理')
     .action(async ({ session }) => {
       return '用法: .st <属性名> <属性值> 或 .st show 查看属性'
     })
 
-  ctx.command('st.set <attr:text> <value:number>', '设置当前角色属性')
+  parent.subcommand('st.set <attr:text> <value:number>', '设置当前角色属性')
     .action(async ({ session }, attr, value) => {
       if (!attr || value === undefined) {
         return '参数不完整喵~ 用法: .st.set <属性名> <属性值>'
@@ -170,7 +170,7 @@ export function registerAttributeCommands(ctx: Context, config: Config, diceAdap
       }
     })
 
-  ctx.command('st.show', '显示当前角色属性')
+  parent.subcommand('st.show', '查看当前角色属性')
     .action(async ({ session }) => {
       try {
         const characterName = `user_${session.userId}`
@@ -192,7 +192,7 @@ export function registerAttributeCommands(ctx: Context, config: Config, diceAdap
       }
     })
 
-  ctx.command('st.clr', '清除当前角色属性')
+  parent.subcommand('st.clr', '清空当前角色属性')
     .action(async ({ session }) => {
       try {
         const characterName = `user_${session.userId}`

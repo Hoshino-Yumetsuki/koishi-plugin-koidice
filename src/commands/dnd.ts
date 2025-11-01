@@ -1,4 +1,4 @@
-import type { Context } from 'koishi'
+import type { Command } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
@@ -6,8 +6,8 @@ import { logger } from '../index'
 /**
  * DND人物作成命令 .dnd
  */
-export function registerDNDGeneratorCommand(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('dnd [count:number]', 'DND人物作成')
+export function registerDNDGeneratorCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('dnd [count:number]', 'DND人物作成')
     .action(async ({ session }, count = 1) => {
       // 限制生成数量
       const maxCount = 10

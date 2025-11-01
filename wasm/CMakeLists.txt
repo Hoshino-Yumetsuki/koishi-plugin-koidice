@@ -65,15 +65,23 @@ set(DICE_CORE_SOURCES
     
     # 文件操作 (简化版)
     ../Dice/Dice/DiceFile.cpp
+    
+    # 牌堆系统
+    ../Dice/Dice/CardDeck.cpp
 )
 
-# WASM导出接口
-set(WASM_INTERFACE_SOURCES
-    src/dice_wasm_interface.cpp
+# WASM接口源文件
+set(WASM_SOURCES
+    src/dice_wasm_bindings.cpp
+    src/dice_roll.cpp
+    src/dice_character.cpp
+    src/dice_insanity.cpp
+    src/dice_initiative.cpp
+    src/dice_deck.cpp
 )
 
 # 创建WASM库
-add_executable(dice ${DICE_CORE_SOURCES} ${WASM_INTERFACE_SOURCES})
+add_executable(dice ${DICE_CORE_SOURCES} ${WASM_SOURCES})
 
 # 设置编译定义
 target_compile_definitions(dice PRIVATE

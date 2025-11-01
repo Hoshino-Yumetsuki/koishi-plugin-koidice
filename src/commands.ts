@@ -12,6 +12,12 @@ import {
   registerDeckCommands,
   registerCharacterCommands,
   registerAttributeCommands,
+  registerInsanityCommands,
+  registerInitiativeCommands,
+  registerSettingsCommands,
+  registerObserverCommands,
+  registerWODCommands,
+  registerRuleCommands,
 } from './commands/index'
 
 let diceAdapter: DiceAdapter | null = null
@@ -30,51 +36,37 @@ export async function initializeDiceAdapter() {
 /**
  * 注册所有命令
  */
-export function registerCommands(ctx: Context, config: Config) {
+export async function registerCommands(ctx: Context, config: Config) {
   if (!diceAdapter) {
     throw new Error('Dice adapter not initialized')
   }
 
-  // .r 基础掷骰命令
-  registerRollCommand(ctx, config, diceAdapter)
+  // 创建主命令
+  const koidice = ctx.command('koidice', 'Dice! TRPG骰子机器人')
+    .alias('koid')
+    .usage('使用 koidice.<子命令> 或 koid.<子命令> 调用功能')
+
+  // 注册所有子命令
+  registerDeckCommands(koidice, config, diceAdapter)
+  registerCharacterCommands(koidice, config, diceAdapter)
+  registerAttributeCommands(koidice, config, diceAdapter)
+  registerRollCommand(koidice, config, diceAdapter)
   
-  // .rc COC检定命令
   if (config.enableCOC) {
-    registerCOCCheckCommand(ctx, config, diceAdapter)
+    registerCOCCheckCommand(koidice, config, diceAdapter)
+    registerGrowthCommand(koidice, config, diceAdapter)
+    registerCOCGeneratorCommand(koidice, config, diceAdapter)
+    registerSanityCheckCommand(koidice, config, diceAdapter)
+    registerInsanityCommands(koidice, config, diceAdapter)
   }
   
-  // .draw 抽卡命令
-  if (config.enableCustomDeck) {
-    registerDeckCommands(ctx, config, diceAdapter)
-  }
-  
-  // .pc 角色卡命令
-  if (config.enableCharacterCard) {
-    registerCharacterCommands(ctx, config, diceAdapter)
-  }
-  
-  // .st 属性设置命令 (COC)
-  if (config.enableCOC) {
-    registerAttributeCommands(ctx, config, diceAdapter)
-  }
-  
-  // .en 成长检定命令 (COC)
-  if (config.enableCOC) {
-    registerGrowthCommand(ctx, config, diceAdapter)
-  }
-  
-  // .coc 人物作成命令
-  if (config.enableCOC) {
-    registerCOCGeneratorCommand(ctx, config, diceAdapter)
-  }
-  
-  // .dnd 人物作成命令
   if (config.enableDND) {
-    registerDNDGeneratorCommand(ctx, config, diceAdapter)
+    registerDNDGeneratorCommand(koidice, config, diceAdapter)
   }
   
-  // .sc 理智检定命令 (COC)
-  if (config.enableCOC) {
-    registerSanityCheckCommand(ctx, config, diceAdapter)
-  }
+  registerInitiativeCommands(koidice, config, diceAdapter)
+  registerSettingsCommands(koidice, config, diceAdapter)
+  registerObserverCommands(koidice, config, diceAdapter)
+  registerWODCommands(koidice, config, diceAdapter)
+  registerRuleCommands(koidice, config, diceAdapter)
 }

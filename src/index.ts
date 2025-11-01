@@ -1,6 +1,15 @@
-import { type Context, Logger } from 'koishi'
+import { type Context, Logger, Schema } from 'koishi'
 import type { Config } from './config'
 import { initializeDiceAdapter, registerCommands } from './commands'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// 读取版本号
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const packageJson = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'))
+export const version = packageJson.version
 import { getDataPath } from './utils/path'
 import { createLogger, setLoggerLevel } from './utils/logger'
 

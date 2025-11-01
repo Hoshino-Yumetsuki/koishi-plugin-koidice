@@ -1,14 +1,15 @@
-import type { Context } from 'koishi'
+import type { Command } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import type { RollResult } from '../wasm'
 import { logger } from '../index'
 
 /**
- * 基础掷骰命令 .r
+ * 掷骰命令 r / rh
  */
-export function registerRollCommand(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('r <expression:text>', '掷骰子')
+export function registerRollCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('roll <expression:text>', '掷骰子')
+    .alias('r')
     .alias('roll')
     .option('reason', '-r <reason:text> 掷骰原因')
     .option('hidden', '-h 暗骰')

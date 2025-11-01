@@ -1,46 +1,50 @@
-import type { Context } from 'koishi'
+import type { Command } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
 
 /**
- * 牌堆命令 .draw
+ * 牌堆命令 .draw / .deck
  */
-export function registerDeckCommands(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('draw <deck:text>', '从牌堆抽卡')
-    .option('count', '-n <count:number> 抽取数量', { fallback: 1 })
-    .action(async ({ session, options }, deck) => {
-      if (!deck) {
-        return '请指定牌堆名称'
+export function registerDeckCommands(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  // 抽卡命令
+  parent.subcommand('draw <deckName:text> [count:number]', '从牌堆抽卡')
+    .alias('deck')
+    .action(async ({ session }, deckName, count = 1) => {
+      if (!deckName) {
+        return '请指定牌堆名称喵~'
       }
-      
-      // 限制单次抽取数量
-      const maxDrawCount = 10
-      if (options.count > maxDrawCount) {
-        return `单次最多抽取${maxDrawCount}张`
+
+      if (count < 1 || count > 10) {
+        return '抽取数量必须在1-10之间喵~'
       }
 
       try {
-        const cards = diceAdapter.drawCard(deck, options.count)
-        return `${session.username} 从 ${deck} 抽到: ${cards.join(', ')}`
+        const result = diceAdapter.drawFromDeck(deckName, count)
+        
+        if (!result.success) {
+          return result.message || '抽卡失败喵~'
+        }
+        
+        if (result.cards.length === 0) {
+          return `牌堆 ${deckName} 已空或不存在喵~`
+        }
+        
+        return `从牌堆 ${deckName} 抽取了: ${result.cards.join(', ')}`
       } catch (error) {
         logger.error('抽卡错误:', error)
-        return '抽卡时发生错误'
+        return `抽卡失败: ${error.message}`
       }
     })
 
-  ctx.command('draw.reset <deck:text>', '重置牌堆')
-    .action(async ({ session }, deck) => {
-      if (!deck) {
-        return '请指定牌堆名称'
-      }
-
+  // 列出牌堆
+  parent.subcommand('draw.list', '列出所有牌堆')
+    .action(async () => {
       try {
-        diceAdapter.resetDeck(deck)
-        return `已重置牌堆: ${deck}`
+        return diceAdapter.listDecks()
       } catch (error) {
-        logger.error('重置牌堆错误:', error)
-        return '重置牌堆时发生错误'
+        logger.error('列出牌堆错误:', error)
+        return '获取牌堆列表失败喵~'
       }
     })
 }

@@ -1,4 +1,4 @@
-import type { Context } from 'koishi'
+import type { Command } from 'koishi'
 import type { Config } from '../config'
 import { DiceAdapter } from '../wasm'
 import type { COCCheckResult, RollResult } from '../wasm'
@@ -8,8 +8,8 @@ import { getCharacterAttribute, setCharacterAttribute } from '../utils/storage'
 /**
  * COC检定命令 .rc
  */
-export function registerCOCCheckCommand(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('rc <skill:number>', 'COC技能检定')
+export function registerCOCCheckCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('rc <skill:number>', 'COC技能检定')
     .alias('check')
     .option('bonus', '-b <bonus:number> 奖励骰数')
     .option('penalty', '-p <penalty:number> 惩罚骰数')
@@ -48,8 +48,8 @@ export function registerCOCCheckCommand(ctx: Context, config: Config, diceAdapte
 /**
  * 成长检定命令 .en
  */
-export function registerGrowthCommand(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('en <skill:text>', '技能成长检定')
+export function registerGrowthCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('en <skill:text>', '成长检定')
     .action(async ({ session }, skill) => {
       if (!skill) {
         return '请指定技能名称'
@@ -58,7 +58,7 @@ export function registerGrowthCommand(ctx: Context, config: Config, diceAdapter:
       try {
         // 获取当前技能值
         const characterName = `user_${session.userId}`
-        const currentValue = getCharacterAttribute(characterName, skill)
+        const currentValue = getCharacterAttribute(characterName, String(skill))
         
         if (currentValue < 0) {
           return `未找到技能 ${skill}，请先使用 .st.set ${skill} <值> 设置喵~`
@@ -79,7 +79,7 @@ export function registerGrowthCommand(ctx: Context, config: Config, diceAdapter:
           const growth = growthResult.total
           const newValue = Math.min(currentValue + growth, 99)
           
-          setCharacterAttribute(characterName, skill, newValue)
+          setCharacterAttribute(characterName, String(skill), newValue)
           
           return `${session.username} ${skill} 成长检定\n` +
                  `${rollValue}/${currentValue} 成功\n` +
@@ -99,8 +99,8 @@ export function registerGrowthCommand(ctx: Context, config: Config, diceAdapter:
 /**
  * COC人物作成命令 .coc
  */
-export function registerCOCGeneratorCommand(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('coc [version:string]', 'COC人物作成')
+export function registerCOCGeneratorCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('coc [version:text]', 'COC7人物作成')
     .option('count', '-n <count:number> 生成数量', { fallback: 1 })
     .action(async ({ session, options }, version) => {
       try {
@@ -124,8 +124,8 @@ export function registerCOCGeneratorCommand(ctx: Context, config: Config, diceAd
 /**
  * 理智检定命令 .sc
  */
-export function registerSanityCheckCommand(ctx: Context, config: Config, diceAdapter: DiceAdapter) {
-  ctx.command('sc <loss:text>', '理智检定')
+export function registerSanityCheckCommand(parent: Command, config: Config, diceAdapter: DiceAdapter) {
+  parent.subcommand('sc <success:text> <failure:text>', '理智检定')
     .option('san', '-s <san:number> 当前理智值')
     .action(async ({ session, options }, loss) => {
       if (!loss) {

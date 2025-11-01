@@ -39,11 +39,34 @@ export interface SanityCheckResult {
   errorMsg: string
 }
 
+/**
+ * 先攻检定结果
+ */
+export interface InitiativeRollResult {
+  success: boolean
+  initiative: number
+  detail: string
+  message?: string
+}
+
+/**
+ * 先攻回合结果
+ */
+export interface InitiativeTurnResult {
+  success: boolean
+  currentName: string
+  currentInitiative: number
+  currentRound: number
+  message?: string
+}
+
+/**
+ * 牌堆抽取结果
+ */
 export interface DeckDrawResult {
+  success: boolean
   cards: string[]
-  remaining: number
-  errorCode: number
-  errorMsg: string
+  message: string
 }
 
 export enum SuccessLevel {
@@ -73,10 +96,29 @@ export interface DiceModule {
   
   // 理智检定功能
   sanityCheck(currentSan: number, successLoss: string, failureLoss: string): SanityCheckResult
+  
+  // 疯狂症状功能
+  getTempInsanity(index: number): string
+  getLongInsanity(index: number): string
+  getPhobia(index: number): string
+  getMania(index: number): string
+  
+  // 先攻列表功能
+  addInitiative(channelId: string, name: string, initiative: number): any
+  rollInitiative(channelId: string, name: string, modifier?: number): InitiativeRollResult
+  removeInitiative(channelId: string, name: string): boolean
+  clearInitiative(channelId: string): boolean
+  nextInitiativeTurn(channelId: string): InitiativeTurnResult
+  getInitiativeList(channelId: string): string
+  getInitiativeCount(channelId: string): number
+  serializeInitiative(channelId: string): string
+  deserializeInitiative(channelId: string, jsonStr: string): boolean
 
   // 牌堆功能
-  drawCard(deckName: string, count?: number): DeckDrawResult
-  resetDeck(deckName: string): void
+  drawFromDeck(deckName: string, count?: number): DeckDrawResult
+  listDecks(): string
+  getDeckSize(deckName: string): number
+  deckExists(deckName: string): boolean
 
   // 角色卡功能
   createCharacter(characterName: string): boolean
