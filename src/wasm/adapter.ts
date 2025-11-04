@@ -10,7 +10,7 @@ import type {
   RuleQueryResult
 } from './types'
 import { SuccessLevel } from './types'
-// @ts-expect-error - dice.js 在编译时不存在，运行时才会生成
+// @ts-ignore
 import createDiceModule from '../../lib/dice.js'
 
 // 模块级别的缓存变量
