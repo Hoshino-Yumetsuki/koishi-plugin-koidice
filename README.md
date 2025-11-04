@@ -92,6 +92,14 @@ yarn build:all
 - 获得接近原生的性能
 - 保持跨平台兼容性
 
+## 功能说明
+
+Koidice 实现了 Dice! 的核心功能，包括所有基础掷骰、COC7/DND 规则等。但为了保持 WASM 体积小和易于维护，部分高级功能（如 JavaScript 脚本支持）未实现。
+
+详细的功能对比和说明请参阅：
+- [QuickJS 实现状态报告](./QUICKJS_STATUS.md) - 技术细节和实现方案
+- [QuickJS 实现检查报告](./QUICKJS_实现检查报告.md) - 功能清单和影响分析
+
 ## 许可证
 
 本项目采用 [AGPL-3.0](./LICENSE) 许可证。
