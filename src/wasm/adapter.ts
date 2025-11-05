@@ -10,7 +10,6 @@ import type {
   RuleQueryResult
 } from './types'
 import { SuccessLevel } from './types'
-// @ts-expect-error
 import createDiceModule from '../../lib/dice.js'
 
 // 模块级别的缓存变量
@@ -313,6 +312,28 @@ export class DiceAdapter {
   generateDND(count = 1): string {
     const module = this.ensureModule()
     return module.generateDNDCharacter(count)
+  }
+
+  // ============ 人物卡解析功能 ============
+
+  /**
+   * 解析 COC 输出格式的属性
+   * @param input COC 输出字符串
+   * @returns JSON 格式的属性对象
+   */
+  parseCOCAttributes(input: string): string {
+    const module = this.ensureModule()
+    return module.parseCOCAttributes(input)
+  }
+
+  /**
+   * 规范化属性名
+   * @param name 属性名
+   * @returns 规范化后的属性名
+   */
+  normalizeAttributeName(name: string): string {
+    const module = this.ensureModule()
+    return module.normalizeAttributeName(name)
   }
 
   // ============ 理智检定功能 ============

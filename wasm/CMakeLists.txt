@@ -96,6 +96,7 @@ set(WASM_SOURCES
     src/dice_wasm_bindings.cpp
     src/dice_roll.cpp
     src/dice_character.cpp
+    src/dice_character_parse.cpp
     src/dice_insanity.cpp
     src/dice_initiative.cpp
     src/dice_deck.cpp

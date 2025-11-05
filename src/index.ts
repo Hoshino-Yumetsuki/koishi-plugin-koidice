@@ -5,8 +5,8 @@ import { clearAllObservers } from './commands/observer'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { extendDatabase } from './database'
 
-// 读取版本号
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const packageJson = JSON.parse(
@@ -18,9 +18,16 @@ import { createLogger, setLoggerLevel } from './utils/logger'
 
 export let logger: Logger
 
+export const inject = {
+  required: ['database']
+}
+
 export async function apply(ctx: Context, config: Config) {
   logger = createLogger(ctx, 'koidice')
   setupLogger(config)
+
+  // 扩展数据库表
+  extendDatabase(ctx)
 
   // 确保数据目录存在
   try {
@@ -64,4 +71,3 @@ function setupLogger(config: Config) {
 }
 
 export * from './config'
-export { name } from './config'

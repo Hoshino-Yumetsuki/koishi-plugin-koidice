@@ -103,6 +103,10 @@ export interface DiceModule {
   generateCOC6Character(): string
   generateDNDCharacter(count?: number): string
 
+  // 人物卡解析功能
+  parseCOCAttributes(input: string): string
+  normalizeAttributeName(name: string): string
+
   // 理智检定功能
   sanityCheck(
     currentSan: number,

@@ -3,6 +3,7 @@
 #include "version.h"
 #include "dice_roll.h"
 #include "dice_character.h"
+#include "dice_character_parse.h"
 #include "dice_insanity.h"
 #include "dice_initiative.h"
 #include "dice_deck.h"
@@ -39,6 +40,10 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("generateCOC7Character", &generateCOC7Character);
     function("generateCOC6Character", &generateCOC6Character);
     function("generateDNDCharacter", &generateDNDCharacter);
+
+    // 人物卡解析功能
+    function("parseCOCAttributes", &parseCOCAttributes);
+    function("normalizeAttributeName", &normalizeAttributeName);
 
     // 理智检定功能
     function("sanityCheck", &sanityCheck);

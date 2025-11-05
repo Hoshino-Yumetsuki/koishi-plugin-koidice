@@ -10,8 +10,7 @@ import {
   registerSanityCheckCommand,
   registerDNDGeneratorCommand,
   registerDeckCommands,
-  registerCharacterCommands,
-  registerAttributeCommands,
+  registerAttributeCharacterCommands,
   registerInsanityCommands,
   registerInitiativeCommands,
   registerSettingsCommands,
@@ -49,8 +48,7 @@ export async function registerCommands(ctx: Context, config: Config) {
 
   // 注册所有子命令
   registerDeckCommands(koidice, config, diceAdapter)
-  registerCharacterCommands(koidice, config, diceAdapter)
-  registerAttributeCommands(koidice, config, diceAdapter)
+  registerAttributeCharacterCommands(koidice, ctx, diceAdapter)
   registerRollCommand(koidice, config, diceAdapter)
 
   if (config.enableCOC) {
@@ -69,5 +67,5 @@ export async function registerCommands(ctx: Context, config: Config) {
   registerSettingsCommands(koidice, config, diceAdapter)
   registerObserverCommands(koidice, config, diceAdapter)
   registerWODCommands(koidice, config, diceAdapter)
-  registerRuleCommands(koidice, config, diceAdapter)
+  registerRuleCommands(koidice, config, diceAdapter, ctx)
 }
