@@ -49,7 +49,13 @@ function loadLocalCache(): RemoteRuleData | null {
     const cachePath = getRulesCachePath()
     if (existsSync(cachePath)) {
       const content = readFileSync(cachePath, 'utf-8')
-      return JSON.parse(content)
+      const data = JSON.parse(content)
+      logger.debug(
+        `加载规则缓存成功: ${Object.keys(data.rules || {}).length} 个系统`
+      )
+      return data
+    } else {
+      logger.debug('规则缓存文件不存在')
     }
   } catch (error) {
     logger.error('加载规则缓存失败:', error)
@@ -60,12 +66,27 @@ function loadLocalCache(): RemoteRuleData | null {
 /**
  * 保存本地缓存
  */
-function saveLocalCache(data: RemoteRuleData): void {
+function saveLocalCache(data: RemoteRuleData): boolean {
   try {
+    // 验证数据有效性
+    if (!data || !data.rules || typeof data.rules !== 'object') {
+      logger.warn('尝试保存无效的规则数据，已跳过')
+      return false
+    }
+
+    const rulesCount = Object.keys(data.rules).length
+    if (rulesCount === 0) {
+      logger.warn('尝试保存空的规则库，已跳过')
+      return false
+    }
+
     const cachePath = getRulesCachePath()
     writeFileSync(cachePath, JSON.stringify(data, null, 2), 'utf-8')
+    logger.info(`规则缓存已保存: ${cachePath}, ${rulesCount} 个系统`)
+    return true
   } catch (error) {
     logger.error('保存规则缓存失败:', error)
+    return false
   }
 }
 
@@ -293,40 +314,43 @@ async function fetchRemoteRule(
 }
 
 /**
- * 从远程服务器拉取完整规则库（用于批量更新）
+ * 缓存单个规则到本地
  */
-async function fetchRemoteRules(ctx: Context): Promise<RemoteRuleData | null> {
+function cacheRemoteRule(
+  system: string,
+  keyword: string,
+  content: string
+): void {
   try {
-    // 使用 Dice! 官方 Kokona API
-    const ruleUrl = 'http://api.kokona.tech:5555/rules'
-
-    logger.info('正在从 Kokona 规则库拉取规则...')
-    const response = await ctx.http.post(ruleUrl, '', {
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'Koishi-Plugin-Koidice',
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    })
-
-    if (response) {
-      const data: RemoteRuleData = {
-        version: response.version || '1.0.0',
-        rules: response.rules || {},
+    // 初始化缓存结构
+    if (!remoteRulesCache) {
+      remoteRulesCache = {
+        version: '1.0.0',
+        rules: {},
         lastUpdate: Date.now()
       }
-
-      // 保存到缓存
-      saveLocalCache(data)
-      remoteRulesCache = data
-
-      logger.info('规则拉取成功')
-      return data
     }
+
+    // 确保系统存在
+    if (!remoteRulesCache.rules[system]) {
+      remoteRulesCache.rules[system] = {}
+    }
+
+    // 添加规则
+    remoteRulesCache.rules[system][keyword] = {
+      name: keyword,
+      content: content
+    }
+
+    // 更新时间戳
+    remoteRulesCache.lastUpdate = Date.now()
+
+    // 保存到文件
+    saveLocalCache(remoteRulesCache)
+    logger.debug(`已缓存规则: ${system}:${keyword}`)
   } catch (error) {
-    logger.error('拉取远程规则失败:', error)
+    logger.error('缓存规则失败:', error)
   }
-  return null
 }
 
 /**
@@ -345,9 +369,11 @@ function getRulesData(): RemoteRuleData | null {
 function findRemoteRule(system: string, keyword: string): RuleEntry | null {
   const data = getRulesData()
   if (!data || !data.rules) {
+    logger.debug(`远程规则缓存为空，无法查询 ${system}:${keyword}`)
     return null
   }
 
+  logger.debug(`从远程缓存查询规则: ${system}:${keyword}`)
   const lowerKeyword = keyword.toLowerCase()
   const lowerSystem = system.toLowerCase()
 
@@ -410,68 +436,27 @@ function findRemoteRule(system: string, keyword: string): RuleEntry | null {
 export function registerRuleCommands(
   parent: Command,
   _config: Config,
-  diceAdapter: DiceAdapter
+  diceAdapter: DiceAdapter,
+  _ctx: Context
 ) {
-  const ctx = parent.ctx
+  // 主命令：规则查询
   parent
     .subcommand('.rule [query:text]', '规则速查')
-    .alias('.rules')
-    .action(async (_session, query) => {
+    .usage('查询规则词条')
+    .example('.rule 大成功')
+    .example('.rule coc:侦查')
+    .action(async ({ session }, query) => {
       try {
         if (!query) {
           return (
             '用法:\n' +
             '.rule <词条> - 查询规则\n' +
-            '.rule list - 列出所有规则\n' +
-            '.rule update - 更新远程规则\n' +
+            '.rule.list - 列出所有规则\n' +
             '.rule coc:<词条> - 查询COC规则\n' +
             '.rule dnd:<词条> - 查询DND规则\n' +
-            '例如: .rule 大成功'
+            '例如: .rule 大成功\n' +
+            '提示: 查询到的远程规则会自动缓存'
           )
-        }
-
-        // 更新远程规则
-        if (query.toLowerCase() === 'update') {
-          const result = await fetchRemoteRules(ctx)
-          if (result) {
-            return `规则库已更新\n版本: ${result.version}\n更新时间: ${new Date(result.lastUpdate).toLocaleString('zh-CN')}`
-          } else {
-            return '更新失败，请检查网络连接'
-          }
-        }
-
-        // 列出规则
-        if (query.toLowerCase() === 'list') {
-          let result = `=== Dice! 内置规则 ===\n`
-
-          try {
-            const allKeys = diceAdapter.listRuleKeys()
-            result += `共 ${allKeys.length} 条规则\n`
-            result += `使用 .rule <关键词> 查询\n`
-          } catch (error) {
-            logger.error('列出规则错误:', error)
-          }
-
-          // 显示本地规则信息
-          if (Object.keys(localRulesCache).length > 0) {
-            result += `\n=== 本地规则文件 ===\n`
-            for (const [system, rules] of Object.entries(localRulesCache)) {
-              result += `${system}: ${Object.keys(rules).length} 条\n`
-            }
-          }
-
-          // 显示远程规则信息
-          const remoteData = getRulesData()
-          if (remoteData) {
-            result += `\n=== 远程规则库 ===\n`
-            result += `版本: ${remoteData.version}\n`
-            result += `系统: ${Object.keys(remoteData.rules).join(', ')}\n`
-            result += `更新时间: ${new Date(remoteData.lastUpdate).toLocaleString('zh-CN')}`
-          } else {
-            result += `\n使用 .rule update 拉取远程规则库`
-          }
-
-          return result
         }
 
         // 解析系统和关键词
@@ -484,61 +469,80 @@ export function registerRuleCommands(
           keyword = parts[1].trim()
         }
 
-        // 1. 先查询 WASM 内置规则
-        try {
-          const wasmResult = system
-            ? diceAdapter.queryRuleBySystem(system, keyword)
-            : diceAdapter.queryRule(keyword)
-
-          if (wasmResult.success && wasmResult.content) {
-            return `【${keyword}】\n${wasmResult.content}`
-          }
-        } catch (error) {
-          logger.debug('WASM规则查询失败:', error)
-        }
-
-        // 2. 查询本地规则文件
         const localRule = findLocalRule(system, keyword)
         if (localRule) {
           return `【${localRule.name}】\n${localRule.content}`
         }
 
-        // 3. 查询本地缓存的远程规则
         const cachedRule = findRemoteRule(system, keyword)
         if (cachedRule) {
           return `【${cachedRule.name}】\n${cachedRule.content}`
         }
 
-        // 4. 实时查询远程规则（与原始 Dice 项目一致）
         try {
-          const remoteResult = await fetchRemoteRule(ctx, system, keyword)
+          // 从 session 中获取 context
+          const sessionCtx = session.app
+          const remoteResult = await fetchRemoteRule(
+            sessionCtx,
+            system,
+            keyword
+          )
           if (remoteResult) {
+            // 自动缓存查询到的规则
+            cacheRemoteRule(system || 'default', keyword, remoteResult)
             return `【${keyword}】\n${remoteResult}`
           }
         } catch (error) {
           logger.debug('远程规则实时查询失败:', error)
         }
 
-        return `未找到规则: ${keyword}\n使用 .rule list 查看所有规则\n或使用 .rule update 更新远程规则库`
+        return `未找到规则: ${keyword}\n使用 .rule.list 查看所有规则`
       } catch (error) {
         logger.error('规则速查错误:', error)
         return '查询失败'
       }
     })
 
+  // 子命令：列出规则
+  parent.subcommand('.rule.list', '列出所有规则').action(async () => {
+    try {
+      let result = `=== Dice! 内置规则 ===\n`
+
+      try {
+        const allKeys = diceAdapter.listRuleKeys()
+        result += `共 ${allKeys.length} 条规则\n`
+        result += `使用 .rule <关键词> 查询\n`
+      } catch (error) {
+        logger.error('列出规则错误:', error)
+      }
+
+      // 显示本地规则信息
+      if (Object.keys(localRulesCache).length > 0) {
+        result += `\n=== 本地规则文件 ===\n`
+        for (const [system, rules] of Object.entries(localRulesCache)) {
+          result += `${system}: ${Object.keys(rules).length} 条\n`
+        }
+      }
+
+      // 显示远程规则信息
+      const remoteData = getRulesData()
+      if (remoteData) {
+        result += `\n=== 远程规则库 ===\n`
+        result += `版本: ${remoteData.version}\n`
+        result += `系统: ${Object.keys(remoteData.rules).join(', ')}\n`
+        result += `更新时间: ${new Date(remoteData.lastUpdate).toLocaleString('zh-CN')}`
+      } else {
+        result += `\n远程规则会在查询时自动缓存`
+      }
+
+      return result
+    } catch (error) {
+      logger.error('列出规则错误:', error)
+      return '列出规则时发生错误'
+    }
+  })
+
   // 启动时加载缓存和本地规则
   remoteRulesCache = loadLocalCache()
   loadLocalRules()
-
-  // 如果缓存过期（超过7天），后台更新
-  if (remoteRulesCache) {
-    const daysSinceUpdate =
-      (Date.now() - remoteRulesCache.lastUpdate) / (1000 * 60 * 60 * 24)
-    if (daysSinceUpdate > 7) {
-      logger.info('规则缓存已过期，后台更新中...')
-      fetchRemoteRules(ctx).catch((err) => {
-        logger.error('后台更新规则失败:', err)
-      })
-    }
-  }
 }
