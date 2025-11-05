@@ -14,8 +14,8 @@ export function registerCOCCheckCommand(
   diceAdapter: DiceAdapter
 ) {
   parent
-    .subcommand('rc <skill:number>', 'COC技能检定')
-    .alias('check')
+    .subcommand('.rc <skill:number>', 'COC技能检定')
+    .alias('.check')
     .option('bonus', '-b <bonus:number> 奖励骰数')
     .option('penalty', '-p <penalty:number> 惩罚骰数')
     .option('reason', '-r <reason:text> 检定原因')
@@ -59,7 +59,7 @@ export function registerGrowthCommand(
   diceAdapter: DiceAdapter
 ) {
   parent
-    .subcommand('en <skill:text>', '成长检定')
+    .subcommand('.en <skill:text>', '成长检定')
     .action(async ({ session }, skill) => {
       if (!skill) {
         return '请指定技能名称'
@@ -119,7 +119,7 @@ export function registerCOCGeneratorCommand(
   diceAdapter: DiceAdapter
 ) {
   parent
-    .subcommand('coc [version:text]', 'COC7人物作成')
+    .subcommand('.coc [version:text]', 'COC7人物作成')
     .option('count', '-n <count:number> 生成数量', { fallback: 1 })
     .action(async ({ session }, version) => {
       try {
@@ -149,7 +149,7 @@ export function registerSanityCheckCommand(
   diceAdapter: DiceAdapter
 ) {
   parent
-    .subcommand('sc <success:text> <failure:text>', '理智检定')
+    .subcommand('.sc <success:text> <failure:text>', '理智检定')
     .option('san', '-s <san:number> 当前理智值')
     .action(async ({ session, options }, loss) => {
       if (!loss) {

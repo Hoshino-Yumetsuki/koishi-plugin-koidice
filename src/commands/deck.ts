@@ -13,8 +13,8 @@ export function registerDeckCommands(
 ) {
   // 抽卡命令
   parent
-    .subcommand('draw <deckName:text> [count:number]', '从牌堆抽卡')
-    .alias('deck')
+    .subcommand('.draw <deckName:text> [count:number]', '从牌堆抽卡')
+    .alias('.deck')
     .action(async ({ session }, deckName, count = 1) => {
       if (!deckName) {
         return '请指定牌堆名称'
@@ -43,7 +43,7 @@ export function registerDeckCommands(
     })
 
   // 列出牌堆
-  parent.subcommand('draw.list', '列出所有牌堆').action(async () => {
+  parent.subcommand('.draw.list', '列出所有牌堆').action(async () => {
     try {
       return diceAdapter.listDecks()
     } catch (error) {

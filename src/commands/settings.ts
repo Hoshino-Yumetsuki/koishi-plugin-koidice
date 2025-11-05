@@ -60,7 +60,7 @@ export function registerSettingsCommands(
 ) {
   // 设置默认骰
   parent
-    .subcommand('set [dice:number]', '设置默认骰面数')
+    .subcommand('.set [dice:number]', '设置默认骰面数')
     .action(async ({ session }, dice) => {
       try {
         const userId = session.userId
@@ -88,7 +88,7 @@ export function registerSettingsCommands(
 
   // 设置COC房规
   parent
-    .subcommand('setcoc [rule:number]', '设置COC检定房规')
+    .subcommand('.setcoc [rule:number]', '设置COC检定房规')
     .action(async ({ session }, rule) => {
       try {
         const userId = session.userId
@@ -123,7 +123,7 @@ export function registerSettingsCommands(
 
   // 设置昵称
   parent
-    .subcommand('nn [nickname:text]', '设置昵称')
+    .subcommand('.nn [nickname:text]', '设置昵称')
     .action(async ({ session }, nickname) => {
       try {
         const userId = session.userId

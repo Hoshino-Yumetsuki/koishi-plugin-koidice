@@ -13,12 +13,16 @@ export function registerRollCommand(
   diceAdapter: DiceAdapter
 ) {
   parent
-    .subcommand('roll <expression:text>', '掷骰子')
-    .alias('r')
-    .alias('roll')
+    .subcommand('.roll [expression:text]', '掷骰子')
+    .alias('.r')
     .option('reason', '-r <reason:text> 掷骰原因')
     .option('hidden', '-d 暗骰（隐藏结果）')
     .action(async ({ session, options }, expression) => {
+      logger.debug(
+        `Roll command triggered: expression=${expression}, options=`,
+        options
+      )
+
       if (!expression) {
         expression = `1d${config.defaultDice}`
       }

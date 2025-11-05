@@ -13,7 +13,7 @@ export function registerWODCommands(
 ) {
   // .ww 骰池（显示详细）
   parent
-    .subcommand('ww <expression:text>', 'WOD骰池（显示详细）')
+    .subcommand('.ww <expression:text>', 'WOD骰池（显示详细）')
     .action(async ({ session }, expression) => {
       if (!expression) {
         return '用法: .ww <骰子数>a<加骰线>\n例如: .ww 10a8 表示投10个骰子，8点及以上加骰'
@@ -30,7 +30,7 @@ export function registerWODCommands(
 
   // .w 骰池（只显示结果）
   parent
-    .subcommand('w <expression:text>', 'WOD骰池（只显示结果）')
+    .subcommand('.w <expression:text>', 'WOD骰池（只显示结果）')
     .action(async ({ session }, expression) => {
       if (!expression) {
         return '用法: .w <骰子数>a<加骰线>\n例如: .w 10a8 表示投10个骰子，8点及以上加骰'

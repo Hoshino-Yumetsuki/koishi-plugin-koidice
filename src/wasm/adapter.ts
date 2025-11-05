@@ -10,7 +10,7 @@ import type {
   RuleQueryResult
 } from './types'
 import { SuccessLevel } from './types'
-// @ts-ignore
+// @ts-expect-error
 import createDiceModule from '../../lib/dice.js'
 
 // 模块级别的缓存变量

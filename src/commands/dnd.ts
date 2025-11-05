@@ -12,7 +12,7 @@ export function registerDNDGeneratorCommand(
   diceAdapter: DiceAdapter
 ) {
   parent
-    .subcommand('dnd [count:number]', 'DND人物作成')
+    .subcommand('.dnd [count:number]', 'DND人物作成')
     .action(async ({ session }, count = 1) => {
       // 限制生成数量
       const maxCount = 10

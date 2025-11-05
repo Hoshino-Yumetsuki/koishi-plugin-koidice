@@ -185,8 +185,8 @@ export function registerRuleCommands(
 ) {
   const ctx = parent.ctx
   parent
-    .subcommand('rule [query:text]', '规则速查')
-    .alias('rules')
+    .subcommand('.rule [query:text]', '规则速查')
+    .alias('.rules')
     .action(async (_session, query) => {
       try {
         if (!query) {

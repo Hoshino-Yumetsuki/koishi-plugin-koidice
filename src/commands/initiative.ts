@@ -50,7 +50,7 @@ export function registerInitiativeCommands(
   diceAdapter: DiceAdapter
 ) {
   // 先攻列表主命令
-  parent.subcommand('init', '先攻列表管理').action(async () => {
+  parent.subcommand('.init', '先攻列表管理').action(async () => {
     return (
       '用法:\n' +
       '.init <名称> <先攻值> - 添加到先攻列表\n' +
@@ -63,7 +63,7 @@ export function registerInitiativeCommands(
 
   // 添加先攻
   parent
-    .subcommand('init <name:text> [initiative:number]', '添加先攻')
+    .subcommand('.init <name:text> [initiative:number]', '添加先攻')
     .action(async ({ session }, name, initiative) => {
       if (!name) {
         return '请指定名称'
@@ -103,8 +103,8 @@ export function registerInitiativeCommands(
 
   // 显示先攻列表
   parent
-    .subcommand('init.list', '显示先攻列表')
-    .alias('init.show')
+    .subcommand('.init.list', '显示先攻列表')
+    .alias('.init.show')
     .action(async ({ session }) => {
       try {
         const channelId = session.channelId || session.userId
@@ -127,8 +127,8 @@ export function registerInitiativeCommands(
 
   // 清空先攻列表
   parent
-    .subcommand('init.clr', '清空先攻列表')
-    .alias('init.clear')
+    .subcommand('.init.clr', '清空先攻列表')
+    .alias('.init.clear')
     .action(async ({ session }) => {
       try {
         const channelId = session.channelId || session.userId
@@ -154,8 +154,8 @@ export function registerInitiativeCommands(
 
   // 移除先攻条目
   parent
-    .subcommand('init.del <name:text>', '移除先攻条目')
-    .alias('init.rm')
+    .subcommand('.init.del <name:text>', '移除先攻条目')
+    .alias('.init.rm')
     .action(async ({ session }, name) => {
       if (!name) {
         return '请指定要移除的名称'
@@ -201,8 +201,8 @@ export function registerInitiativeCommands(
 
   // 下一个回合
   parent
-    .subcommand('init.next', '下一个回合')
-    .alias('init.n')
+    .subcommand('.init.next', '下一个回合')
+    .alias('.init.n')
     .action(async ({ session }) => {
       try {
         const channelId = session.channelId || session.userId
@@ -233,7 +233,7 @@ export function registerInitiativeCommands(
 
   // 快速先攻 .ri
   parent
-    .subcommand('ri [modifier:number]', '快速先攻检定')
+    .subcommand('.ri [modifier:number]', '快速先攻检定')
     .action(async ({ session }, modifier = 0) => {
       try {
         const channelId = session.channelId || session.userId

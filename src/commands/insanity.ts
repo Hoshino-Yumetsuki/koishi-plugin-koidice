@@ -12,7 +12,7 @@ export function registerInsanityCommands(
   diceAdapter: DiceAdapter
 ) {
   // 临时疯狂症状 .ti
-  parent.subcommand('ti', '临时疯狂症状').action(async ({ session }) => {
+  parent.subcommand('.ti', '临时疯狂症状').action(async ({ session }) => {
     try {
       // 1d10 决定症状类型
       const typeRoll = diceAdapter.roll('1d10', 10)
@@ -62,7 +62,7 @@ export function registerInsanityCommands(
   })
 
   // 永久/不定疯狂症状 .li
-  parent.subcommand('li', '永久/不定疯狂症状').action(async ({ session }) => {
+  parent.subcommand('.li', '永久/不定疯狂症状').action(async ({ session }) => {
     try {
       // 1d10 决定症状类型
       const typeRoll = diceAdapter.roll('1d10', 10)

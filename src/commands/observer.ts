@@ -22,7 +22,7 @@ export function registerObserverCommands(
   _diceAdapter: DiceAdapter
 ) {
   parent
-    .subcommand('ob [action:text]', '旁观模式')
+    .subcommand('.ob [action:text]', '旁观模式')
     .action(async ({ session }, action) => {
       const channelId = session.channelId
       const userId = session.userId

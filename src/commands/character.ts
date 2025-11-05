@@ -20,10 +20,10 @@ export function registerCharacterCommands(
   config: Config,
   _diceAdapter: DiceAdapter
 ) {
-  parent.subcommand('pc', '角色卡管理')
+  parent.subcommand('.pc', '角色卡管理')
 
   parent
-    .subcommand('pc.new <name:text>', '创建角色卡')
+    .subcommand('.pc.new <name:text>', '创建角色卡')
     .action(async ({ session }, name) => {
       if (!name) {
         return '请指定角色名称'
@@ -48,7 +48,10 @@ export function registerCharacterCommands(
     })
 
   parent
-    .subcommand('pc.set <name:text> <attr:text> <value:number>', '设置角色属性')
+    .subcommand(
+      '.pc.set <name:text> <attr:text> <value:number>',
+      '设置角色属性'
+    )
     .action(async ({ session }, name, attr, value) => {
       if (!name || !attr || value === undefined) {
         return '参数不完整 用法: .pc.set <角色名> <属性名> <属性值>'
@@ -72,7 +75,7 @@ export function registerCharacterCommands(
     })
 
   parent
-    .subcommand('pc.get <name:text> <attr:text>', '查询角色属性')
+    .subcommand('.pc.get <name:text> <attr:text>', '查询角色属性')
     .action(async ({ session }, name, attr) => {
       if (!name || !attr) {
         return '参数不完整 用法: .pc.get <角色名> <属性名>'
@@ -90,7 +93,7 @@ export function registerCharacterCommands(
     })
 
   parent
-    .subcommand('pc.del <name:text>', '删除角色卡')
+    .subcommand('.pc.del <name:text>', '删除角色卡')
     .action(async ({ session }, name) => {
       if (!name) {
         return '请指定角色名称'
@@ -107,21 +110,23 @@ export function registerCharacterCommands(
       }
     })
 
-  parent.subcommand('pc.list', '列出所有角色卡').action(async ({ session }) => {
-    try {
-      const characters = listCharacters()
-      if (characters.length === 0) {
-        return '还没有任何角色卡'
+  parent
+    .subcommand('.pc.list', '列出所有角色卡')
+    .action(async ({ session }) => {
+      try {
+        const characters = listCharacters()
+        if (characters.length === 0) {
+          return '还没有任何角色卡'
+        }
+        return `${session.username} 的角色卡列表 (${characters.length}个):\n${characters.map((name, i) => `${i + 1}. ${name}`).join('\n')}`
+      } catch (error) {
+        logger.error('列出角色卡错误:', error)
+        return '列出角色卡时发生错误'
       }
-      return `${session.username} 的角色卡列表 (${characters.length}个):\n${characters.map((name, i) => `${i + 1}. ${name}`).join('\n')}`
-    } catch (error) {
-      logger.error('列出角色卡错误:', error)
-      return '列出角色卡时发生错误'
-    }
-  })
+    })
 
   parent
-    .subcommand('pc.show [name:text]', '查看角色卡详情')
+    .subcommand('.pc.show [name:text]', '查看角色卡详情')
     .action(async ({ session }, name) => {
       if (!name) {
         return '请指定角色名称'
@@ -174,12 +179,12 @@ export function registerAttributeCommands(
   config: Config,
   _diceAdapter: DiceAdapter
 ) {
-  parent.subcommand('st', '角色属性管理').action(async () => {
+  parent.subcommand('.st', '角色属性管理').action(async () => {
     return '用法: .st <属性名> <属性值> 或 .st show 查看属性'
   })
 
   parent
-    .subcommand('st.set <attr:text> <value:number>', '设置当前角色属性')
+    .subcommand('.st.set <attr:text> <value:number>', '设置当前角色属性')
     .action(async ({ session }, attr, value) => {
       if (!attr || value === undefined) {
         return '参数不完整 用法: .st.set <属性名> <属性值>'
@@ -205,7 +210,7 @@ export function registerAttributeCommands(
     })
 
   parent
-    .subcommand('st.show', '查看当前角色属性')
+    .subcommand('.st.show', '查看当前角色属性')
     .action(async ({ session }) => {
       try {
         const characterName = `user_${session.userId}`
@@ -228,7 +233,7 @@ export function registerAttributeCommands(
     })
 
   parent
-    .subcommand('st.clr', '清空当前角色属性')
+    .subcommand('.st.clr', '清空当前角色属性')
     .action(async ({ session }) => {
       try {
         const characterName = `user_${session.userId}`
