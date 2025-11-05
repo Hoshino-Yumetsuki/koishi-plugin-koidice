@@ -54,10 +54,10 @@ export async function registerCommands(ctx: Context, config: Config) {
   registerCheckCommand(koidice, ctx, config, diceAdapter)
 
   if (config.enableCOC) {
-    registerCOCCheckCommand(koidice, config, diceAdapter)
-    registerGrowthCommand(koidice, config, diceAdapter)
+    registerCOCCheckCommand(koidice, ctx, config, diceAdapter)
+    registerGrowthCommand(koidice, ctx, config, diceAdapter)
     registerCOCGeneratorCommand(koidice, config, diceAdapter)
-    registerSanityCheckCommand(koidice, config, diceAdapter)
+    registerSanityCheckCommand(koidice, ctx, config, diceAdapter)
     registerInsanityCommands(koidice, config, diceAdapter)
   }
 
@@ -65,9 +65,9 @@ export async function registerCommands(ctx: Context, config: Config) {
     registerDNDGeneratorCommand(koidice, config, diceAdapter)
   }
 
-  registerInitiativeCommands(koidice, config, diceAdapter)
-  registerSettingsCommands(koidice, config, diceAdapter)
-  registerObserverCommands(koidice, config, diceAdapter)
+  registerInitiativeCommands(koidice, ctx, config, diceAdapter)
+  registerSettingsCommands(koidice, ctx, config, diceAdapter)
+  registerObserverCommands(koidice, ctx, config, diceAdapter)
   registerWODCommands(koidice, config, diceAdapter)
   registerRuleCommands(koidice, config, diceAdapter, ctx)
 }

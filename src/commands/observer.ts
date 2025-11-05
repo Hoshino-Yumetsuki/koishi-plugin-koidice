@@ -1,23 +1,163 @@
-import type { Command } from 'koishi'
+import type { Command, Context, } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
 
 /**
- * 旁观者列表（按频道存储）
+ * 获取频道的旁观者列表
  */
-const observers = new Map<string, Set<string>>()
+async function getObservers(
+  ctx: Context,
+  channelId: string,
+  platform: string
+): Promise<string[]> {
+  try {
+    const records = await ctx.database.get('koidice_observer', {
+      channelId,
+      platform
+    })
+    return records.map((r) => r.userId)
+  } catch (error) {
+    logger.error('获取旁观者列表失败:', error)
+    return []
+  }
+}
 
 /**
- * 旁观模式开关（按频道存储）
+ * 检查旁观模式是否开启
  */
-const observerMode = new Map<string, boolean>()
+async function isObserverModeEnabled(
+  ctx: Context,
+  channelId: string,
+  platform: string
+): Promise<boolean> {
+  try {
+    const records = await ctx.database.get('koidice_observer', {
+      channelId,
+      platform,
+      userId: '__mode__' // 特殊标记，用于存储模式状态
+    })
+    return records.length > 0 && records[0].isEnabled
+  } catch (error) {
+    logger.error('检查旁观模式失败:', error)
+    return false
+  }
+}
+
+/**
+ * 设置旁观模式
+ */
+async function setObserverMode(
+  ctx: Context,
+  channelId: string,
+  platform: string,
+  enabled: boolean
+): Promise<void> {
+  try {
+    const existing = await ctx.database.get('koidice_observer', {
+      channelId,
+      platform,
+      userId: '__mode__'
+    })
+
+    if (existing.length > 0) {
+      await ctx.database.set(
+        'koidice_observer',
+        { channelId, platform, userId: '__mode__' },
+        { isEnabled: enabled }
+      )
+    } else {
+      await ctx.database.create('koidice_observer', {
+        channelId,
+        platform,
+        userId: '__mode__',
+        isEnabled: enabled,
+        createdAt: new Date()
+      })
+    }
+  } catch (error) {
+    logger.error('设置旁观模式失败:', error)
+  }
+}
+
+/**
+ * 添加旁观者
+ */
+async function addObserver(
+  ctx: Context,
+  channelId: string,
+  platform: string,
+  userId: string
+): Promise<boolean> {
+  try {
+    const existing = await ctx.database.get('koidice_observer', {
+      channelId,
+      platform,
+      userId
+    })
+
+    if (existing.length === 0) {
+      await ctx.database.create('koidice_observer', {
+        channelId,
+        platform,
+        userId,
+        isEnabled: false,
+        createdAt: new Date()
+      })
+    }
+    return true
+  } catch (error) {
+    logger.error('添加旁观者失败:', error)
+    return false
+  }
+}
+
+/**
+ * 移除旁观者
+ */
+async function removeObserver(
+  ctx: Context,
+  channelId: string,
+  platform: string,
+  userId: string
+): Promise<boolean> {
+  try {
+    const result = await ctx.database.remove('koidice_observer', {
+      channelId,
+      platform,
+      userId
+    })
+    return result.matched > 0
+  } catch (error) {
+    logger.error('移除旁观者失败:', error)
+    return false
+  }
+}
+
+/**
+ * 清空频道的所有旁观者
+ */
+async function clearObservers(
+  ctx: Context,
+  channelId: string,
+  platform: string
+): Promise<void> {
+  try {
+    await ctx.database.remove('koidice_observer', {
+      channelId,
+      platform
+    })
+  } catch (error) {
+    logger.error('清空旁观者失败:', error)
+  }
+}
 
 /**
  * 旁观模式命令 .ob
  */
 export function registerObserverCommands(
   parent: Command,
+  ctx: Context,
   _config: Config,
   _diceAdapter: DiceAdapter
 ) {
@@ -47,50 +187,60 @@ export function registerObserverCommands(
 
         switch (lowerAction) {
           case 'join': {
-            if (!observerMode.get(channelId)) {
+            const modeEnabled = await isObserverModeEnabled(
+              ctx,
+              channelId,
+              session.platform
+            )
+            if (!modeEnabled) {
               return '本桌旁观模式未开启'
             }
 
-            if (!observers.has(channelId)) {
-              observers.set(channelId, new Set())
-            }
-            observers.get(channelId)?.add(userId)
+            await addObserver(ctx, channelId, session.platform, userId)
             return `${session.username} 已加入旁观`
           }
 
           case 'exit': {
-            const channelObservers = observers.get(channelId)
-            if (!channelObservers || !channelObservers.has(userId)) {
+            const removed = await removeObserver(
+              ctx,
+              channelId,
+              session.platform,
+              userId
+            )
+            if (!removed) {
               return '你不在旁观列表中'
             }
-            channelObservers.delete(userId)
             return `${session.username} 已退出旁观`
           }
 
           case 'list': {
-            const channelObservers = observers.get(channelId)
-            if (!channelObservers || channelObservers.size === 0) {
+            const channelObservers = await getObservers(
+              ctx,
+              channelId,
+              session.platform
+            )
+            if (channelObservers.length === 0) {
               return '当前没有旁观者'
             }
-            return `旁观者列表:\n${Array.from(channelObservers)
+            return `旁观者列表:\n${channelObservers
               .map((id, i) => `${i + 1}. ${id}`)
               .join('\n')}`
           }
 
           case 'clr':
           case 'clear': {
-            observers.delete(channelId)
+            await clearObservers(ctx, channelId, session.platform)
             return '已清除所有旁观者'
           }
 
           case 'on': {
-            observerMode.set(channelId, true)
+            await setObserverMode(ctx, channelId, session.platform, true)
             return '已开启旁观模式'
           }
 
           case 'off': {
-            observerMode.set(channelId, false)
-            observers.delete(channelId)
+            await setObserverMode(ctx, channelId, session.platform, false)
+            await clearObservers(ctx, channelId, session.platform)
             return '已关闭旁观模式'
           }
 
@@ -107,30 +257,29 @@ export function registerObserverCommands(
 /**
  * 检查用户是否为旁观者
  */
-export function isObserver(channelId: string, userId: string): boolean {
-  const channelObservers = observers.get(channelId)
-  return channelObservers ? channelObservers.has(userId) : false
-}
-
-/**
- * 获取频道的旁观者列表
- */
-export function getObservers(channelId: string): string[] {
-  const channelObservers = observers.get(channelId)
-  return channelObservers ? Array.from(channelObservers) : []
-}
-
-/**
- * 检查旁观模式是否开启
- */
-export function isObserverModeEnabled(channelId: string): boolean {
-  return observerMode.get(channelId) ?? false
+export async function isObserver(
+  ctx: Context,
+  channelId: string,
+  platform: string,
+  userId: string
+): Promise<boolean> {
+  try {
+    const records = await ctx.database.get('koidice_observer', {
+      channelId,
+      platform,
+      userId
+    })
+    return records.length > 0
+  } catch (error) {
+    logger.error('检查旁观者失败:', error)
+    return false
+  }
 }
 
 /**
  * 清理所有旁观者数据 (插件卸载时调用)
  */
 export function clearAllObservers(): void {
-  observers.clear()
-  observerMode.clear()
+  // 数据库持久化，不需要清理
+  logger.debug('旁观者数据已持久化到数据库')
 }

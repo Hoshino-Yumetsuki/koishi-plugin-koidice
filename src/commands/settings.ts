@@ -1,36 +1,38 @@
-import type { Command } from 'koishi'
+import type { Command, Context, Session } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { getDataPath } from '../utils/path'
 
 /**
- * 用户设置
+ * 用户设置（扩展字段）
  */
-interface UserSettings {
+interface UserSettingsExt {
   defaultDice?: number
   cocRule?: number
   nickname?: string
 }
 
 /**
- * 获取设置文件路径
- */
-function getSettingsFilePath(userId: string): string {
-  return resolve(getDataPath(), `settings_${userId}.json`)
-}
-
-/**
  * 加载用户设置
  */
-function loadSettings(userId: string): UserSettings {
+async function loadSettings(
+  ctx: Context,
+  session: Session
+): Promise<UserSettingsExt> {
   try {
-    const filePath = getSettingsFilePath(userId)
-    if (existsSync(filePath)) {
-      const content = readFileSync(filePath, 'utf-8')
-      return JSON.parse(content)
+    const { userId, platform } = session
+    const records = await ctx.database.get('koidice_user_settings', {
+      userId,
+      platform
+    })
+
+    if (records.length > 0) {
+      const record = records[0]
+      return {
+        defaultDice: record.defaultDice,
+        cocRule: undefined, // COC规则暂时不在数据库中
+        nickname: undefined // 昵称暂时不在数据库中
+      }
     }
   } catch (error) {
     logger.error('加载设置失败:', error)
@@ -41,10 +43,42 @@ function loadSettings(userId: string): UserSettings {
 /**
  * 保存用户设置
  */
-function saveSettings(userId: string, settings: UserSettings): void {
+async function saveSettings(
+  ctx: Context,
+  session: Session,
+  settings: UserSettingsExt
+): Promise<void> {
   try {
-    const filePath = getSettingsFilePath(userId)
-    writeFileSync(filePath, JSON.stringify(settings, null, 2), 'utf-8')
+    const { userId, platform } = session
+    const existing = await ctx.database.get('koidice_user_settings', {
+      userId,
+      platform
+    })
+
+    const now = new Date()
+
+    if (existing.length > 0) {
+      // 更新现有记录
+      await ctx.database.set(
+        'koidice_user_settings',
+        { userId, platform },
+        {
+          defaultDice: settings.defaultDice ?? 100,
+          showDetail: true,
+          updatedAt: now
+        }
+      )
+    } else {
+      // 创建新记录
+      await ctx.database.create('koidice_user_settings', {
+        userId,
+        platform,
+        defaultDice: settings.defaultDice ?? 100,
+        showDetail: true,
+        createdAt: now,
+        updatedAt: now
+      })
+    }
   } catch (error) {
     logger.error('保存设置失败:', error)
   }
@@ -55,6 +89,7 @@ function saveSettings(userId: string, settings: UserSettings): void {
  */
 export function registerSettingsCommands(
   parent: Command,
+  ctx: Context,
   _config: Config,
   _diceAdapter: DiceAdapter
 ) {
@@ -63,13 +98,12 @@ export function registerSettingsCommands(
     .subcommand('.set [dice:number]', '设置默认骰面数')
     .action(async ({ session }, dice) => {
       try {
-        const userId = session.userId
-        const settings = loadSettings(userId)
+        const settings = await loadSettings(ctx, session)
 
         if (dice === undefined) {
           // 重置为默认值
           delete settings.defaultDice
-          saveSettings(userId, settings)
+          await saveSettings(ctx, session, settings)
           return '已重置默认骰为 D100'
         }
 
@@ -78,7 +112,7 @@ export function registerSettingsCommands(
         }
 
         settings.defaultDice = dice
-        saveSettings(userId, settings)
+        await saveSettings(ctx, session, settings)
         return `已设置默认骰为 D${dice}`
       } catch (error) {
         logger.error('设置默认骰错误:', error)
@@ -91,8 +125,7 @@ export function registerSettingsCommands(
     .subcommand('.setcoc [rule:number]', '设置COC检定房规')
     .action(async ({ session }, rule) => {
       try {
-        const userId = session.userId
-        const settings = loadSettings(userId)
+        const settings = await loadSettings(ctx, session)
 
         if (rule === undefined) {
           // 显示当前房规
@@ -113,7 +146,7 @@ export function registerSettingsCommands(
         }
 
         settings.cocRule = rule
-        saveSettings(userId, settings)
+        await saveSettings(ctx, session, settings)
         return `已设置COC房规为 ${rule}`
       } catch (error) {
         logger.error('设置COC房规错误:', error)
@@ -126,8 +159,7 @@ export function registerSettingsCommands(
     .subcommand('.nn [nickname:text]', '设置昵称')
     .action(async ({ session }, nickname) => {
       try {
-        const userId = session.userId
-        const settings = loadSettings(userId)
+        const settings = await loadSettings(ctx, session)
 
         if (!nickname) {
           // 显示当前昵称
@@ -141,7 +173,7 @@ export function registerSettingsCommands(
         if (nickname === 'del' || nickname === 'clr') {
           // 删除昵称
           delete settings.nickname
-          saveSettings(userId, settings)
+          await saveSettings(ctx, session, settings)
           return '已删除昵称设置'
         }
 
@@ -153,7 +185,7 @@ export function registerSettingsCommands(
         }
 
         settings.nickname = nickname
-        saveSettings(userId, settings)
+        await saveSettings(ctx, session, settings)
         return `已设置昵称为: ${nickname}`
       } catch (error) {
         logger.error('设置昵称错误:', error)
@@ -165,23 +197,46 @@ export function registerSettingsCommands(
 /**
  * 获取用户默认骰
  */
-export function getUserDefaultDice(userId: string): number {
-  const settings = loadSettings(userId)
-  return settings.defaultDice ?? 100
+export async function getUserDefaultDice(
+  ctx: Context,
+  userId: string,
+  platform: string
+): Promise<number> {
+  try {
+    const records = await ctx.database.get('koidice_user_settings', {
+      userId,
+      platform
+    })
+    if (records.length > 0) {
+      return records[0].defaultDice ?? 100
+    }
+  } catch (error) {
+    logger.error('获取用户默认骰失败:', error)
+  }
+  return 100
 }
 
 /**
  * 获取用户COC房规
  */
-export function getUserCOCRule(userId: string): number {
-  const settings = loadSettings(userId)
-  return settings.cocRule ?? 0
+export async function getUserCOCRule(
+  _ctx: Context,
+  _userId: string,
+  _platform: string
+): Promise<number> {
+  // COC房规暂时不在数据库中，返回默认值
+  return 0
 }
 
 /**
  * 获取用户昵称
  */
-export function getUserNickname(userId: string, defaultName: string): string {
-  const settings = loadSettings(userId)
-  return settings.nickname ?? defaultName
+export async function getUserNickname(
+  _ctx: Context,
+  _userId: string,
+  _platform: string,
+  defaultName: string
+): Promise<string> {
+  // 昵称暂时不在数据库中，返回默认值
+  return defaultName
 }

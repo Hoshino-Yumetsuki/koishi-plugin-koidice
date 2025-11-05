@@ -1,26 +1,25 @@
-import type { Command } from 'koishi'
+import type { Command, Context } from 'koishi'
 import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { getDataPath } from '../utils/path'
-
-/**
- * 获取先攻列表文件路径
- */
-function getInitiativeFilePath(channelId: string): string {
-  return resolve(getDataPath(), `initiative_${channelId}.json`)
-}
 
 /**
  * 加载先攻列表
  */
-function loadInitiative(channelId: string, diceAdapter: DiceAdapter): void {
+async function loadInitiative(
+  ctx: Context,
+  channelId: string,
+  platform: string,
+  diceAdapter: DiceAdapter
+): Promise<void> {
   try {
-    const filePath = getInitiativeFilePath(channelId)
-    if (existsSync(filePath)) {
-      const content = readFileSync(filePath, 'utf-8')
+    const records = await ctx.database.get('koidice_initiative', {
+      channelId,
+      platform
+    })
+
+    if (records.length > 0) {
+      const content = records[0].data
       diceAdapter.deserializeInitiative(channelId, content)
     }
   } catch (error) {
@@ -31,13 +30,60 @@ function loadInitiative(channelId: string, diceAdapter: DiceAdapter): void {
 /**
  * 保存先攻列表
  */
-function saveInitiative(channelId: string, diceAdapter: DiceAdapter): void {
+async function saveInitiative(
+  ctx: Context,
+  channelId: string,
+  platform: string,
+  diceAdapter: DiceAdapter
+): Promise<void> {
   try {
-    const filePath = getInitiativeFilePath(channelId)
     const content = diceAdapter.serializeInitiative(channelId)
-    writeFileSync(filePath, content, 'utf-8')
+    const existing = await ctx.database.get('koidice_initiative', {
+      channelId,
+      platform
+    })
+
+    const now = new Date()
+
+    if (existing.length > 0) {
+      // 更新现有记录
+      await ctx.database.set(
+        'koidice_initiative',
+        { channelId, platform },
+        {
+          data: content,
+          updatedAt: now
+        }
+      )
+    } else {
+      // 创建新记录
+      await ctx.database.create('koidice_initiative', {
+        channelId,
+        platform,
+        data: content,
+        updatedAt: now
+      })
+    }
   } catch (error) {
     logger.error('保存先攻列表失败:', error)
+  }
+}
+
+/**
+ * 删除先攻列表
+ */
+async function deleteInitiative(
+  ctx: Context,
+  channelId: string,
+  platform: string
+): Promise<void> {
+  try {
+    await ctx.database.remove('koidice_initiative', {
+      channelId,
+      platform
+    })
+  } catch (error) {
+    logger.error('删除先攻列表失败:', error)
   }
 }
 
@@ -46,6 +92,7 @@ function saveInitiative(channelId: string, diceAdapter: DiceAdapter): void {
  */
 export function registerInitiativeCommands(
   parent: Command,
+  ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
@@ -71,6 +118,7 @@ export function registerInitiativeCommands(
 
       try {
         const channelId = session.channelId || session.userId
+        const platform = session.platform
 
         // 如果没有提供先攻值，自动掷骰
         let initValue = initiative
@@ -83,7 +131,7 @@ export function registerInitiativeCommands(
         }
 
         // 加载现有列表
-        loadInitiative(channelId, diceAdapter)
+        await loadInitiative(ctx, channelId, platform, diceAdapter)
 
         // 添加到WASM先攻列表
         if (!diceAdapter.addInitiative(channelId, name, initValue)) {
@@ -91,7 +139,7 @@ export function registerInitiativeCommands(
         }
 
         // 保存
-        saveInitiative(channelId, diceAdapter)
+        await saveInitiative(ctx, channelId, platform, diceAdapter)
 
         const list = diceAdapter.getInitiativeList(channelId)
         return `已添加 ${name} 到先攻列表，先攻值: ${initValue}\n\n${list}`
@@ -108,9 +156,10 @@ export function registerInitiativeCommands(
     .action(async ({ session }) => {
       try {
         const channelId = session.channelId || session.userId
+        const platform = session.platform
 
         // 加载列表
-        loadInitiative(channelId, diceAdapter)
+        await loadInitiative(ctx, channelId, platform, diceAdapter)
 
         const count = diceAdapter.getInitiativeCount(channelId)
 
@@ -132,16 +181,11 @@ export function registerInitiativeCommands(
     .action(async ({ session }) => {
       try {
         const channelId = session.channelId || session.userId
+        const platform = session.platform
 
         if (diceAdapter.clearInitiative(channelId)) {
-          // 删除文件
-          try {
-            const fs = require('node:fs')
-            const filePath = getInitiativeFilePath(channelId)
-            if (existsSync(filePath)) {
-              fs.unlinkSync(filePath)
-            }
-          } catch {}
+          // 删除数据库记录
+          await deleteInitiative(ctx, channelId, platform)
           return '已清空先攻列表'
         } else {
           return '没有要清空的先攻列表'
@@ -163,9 +207,10 @@ export function registerInitiativeCommands(
 
       try {
         const channelId = session.channelId || session.userId
+        const platform = session.platform
 
         // 加载列表
-        loadInitiative(channelId, diceAdapter)
+        await loadInitiative(ctx, channelId, platform, diceAdapter)
 
         if (diceAdapter.getInitiativeCount(channelId) === 0) {
           return '当前没有先攻列表'
@@ -177,19 +222,13 @@ export function registerInitiativeCommands(
 
         const count = diceAdapter.getInitiativeCount(channelId)
         if (count === 0) {
-          // 删除文件
-          try {
-            const fs = require('node:fs')
-            const filePath = getInitiativeFilePath(channelId)
-            if (existsSync(filePath)) {
-              fs.unlinkSync(filePath)
-            }
-          } catch {}
+          // 删除数据库记录
+          await deleteInitiative(ctx, channelId, platform)
           return `已移除 ${name}，先攻列表已清空`
         }
 
         // 保存
-        saveInitiative(channelId, diceAdapter)
+        await saveInitiative(ctx, channelId, platform, diceAdapter)
 
         const list = diceAdapter.getInitiativeList(channelId)
         return `已移除 ${name}\n\n${list}`
@@ -206,9 +245,10 @@ export function registerInitiativeCommands(
     .action(async ({ session }) => {
       try {
         const channelId = session.channelId || session.userId
+        const platform = session.platform
 
         // 加载列表
-        loadInitiative(channelId, diceAdapter)
+        await loadInitiative(ctx, channelId, platform, diceAdapter)
 
         if (diceAdapter.getInitiativeCount(channelId) === 0) {
           return '当前没有先攻列表'
@@ -221,7 +261,7 @@ export function registerInitiativeCommands(
         }
 
         // 保存
-        saveInitiative(channelId, diceAdapter)
+        await saveInitiative(ctx, channelId, platform, diceAdapter)
 
         const list = diceAdapter.getInitiativeList(channelId)
         return `轮到 ${result.currentName} 行动！\n\n${list}`
@@ -237,10 +277,11 @@ export function registerInitiativeCommands(
     .action(async ({ session }, modifier = 0) => {
       try {
         const channelId = session.channelId || session.userId
+        const platform = session.platform
         const name = session.username || `用户${session.userId}`
 
         // 加载现有列表
-        loadInitiative(channelId, diceAdapter)
+        await loadInitiative(ctx, channelId, platform, diceAdapter)
 
         // 调用WASM先攻检定
         const result = diceAdapter.rollInitiative(channelId, name, modifier)
@@ -250,7 +291,7 @@ export function registerInitiativeCommands(
         }
 
         // 保存
-        saveInitiative(channelId, diceAdapter)
+        await saveInitiative(ctx, channelId, platform, diceAdapter)
 
         const list = diceAdapter.getInitiativeList(channelId)
         return `${name} 的先攻检定: ${result.detail}\n\n${list}`

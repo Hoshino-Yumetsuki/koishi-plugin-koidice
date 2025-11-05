@@ -1,15 +1,16 @@
-import type { Command } from 'koishi'
+import type { Command, Context } from 'koishi'
 import type { Config } from '../config'
 import { DiceAdapter } from '../wasm'
 import type { COCCheckResult, RollResult } from '../wasm'
 import { logger } from '../index'
-import { getCharacterAttribute, setCharacterAttribute } from '../utils/storage'
+import { CharacterService } from '../services/character-service'
 
 /**
  * COC检定命令 .rc
  */
 export function registerCOCCheckCommand(
   parent: Command,
+  _ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
@@ -55,9 +56,12 @@ export function registerCOCCheckCommand(
  */
 export function registerGrowthCommand(
   parent: Command,
+  ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
+  const characterService = new CharacterService(ctx, diceAdapter)
+
   parent
     .subcommand('.en <skill:text>', '成长检定')
     .action(async ({ session }, skill) => {
@@ -67,12 +71,12 @@ export function registerGrowthCommand(
 
       try {
         // 获取当前技能值
-        const characterName = `user_${session.userId}`
-        const currentValue = getCharacterAttribute(characterName, String(skill))
-
-        if (currentValue < 0) {
+        const attributes = await characterService.getAttributes(session, null)
+        if (!attributes || !(String(skill) in attributes)) {
           return `未找到技能 ${skill}，请先使用 .st.set ${skill} <值> 设置`
         }
+
+        const currentValue = attributes[String(skill)]
 
         // 成长检定: 1d100 > 当前技能值
         const result: RollResult = diceAdapter.roll('1d100', 100)
@@ -89,7 +93,9 @@ export function registerGrowthCommand(
           const growth = growthResult.total
           const newValue = Math.min(currentValue + growth, 99)
 
-          setCharacterAttribute(characterName, String(skill), newValue)
+          await characterService.setAttributes(session, null, {
+            [String(skill)]: newValue
+          })
 
           return (
             `${session.username} ${skill} 成长检定\n` +
@@ -145,9 +151,11 @@ export function registerCOCGeneratorCommand(
  */
 export function registerSanityCheckCommand(
   parent: Command,
+  ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
+  const characterService = new CharacterService(ctx, diceAdapter)
   parent
     .subcommand('.sc <success:text> <failure:text>', '理智检定')
     .option('san', '-s <san:number> 当前理智值')
@@ -170,12 +178,11 @@ export function registerSanityCheckCommand(
         let currentSan = options.san
         if (currentSan === undefined) {
           // 尝试从角色卡获取
-          const characterName = `user_${session.userId}`
-          currentSan = getCharacterAttribute(characterName, 'san')
-
-          if (currentSan < 0) {
-            return '未设定SAN值，请使用 -s 参数指定或先 .st.set san <值> '
+          const attributes = await characterService.getAttributes(session, null)
+          if (!attributes || !('理智' in attributes)) {
+            return '未设定SAN值，请使用 -s 参数指定或先 .st.set 理智 <值> '
           }
+          currentSan = attributes.理智
         }
 
         if (currentSan < 0 || currentSan > 99) {
@@ -194,8 +201,9 @@ export function registerSanityCheckCommand(
         }
 
         // 更新角色卡SAN值
-        const characterName = `user_${session.userId}`
-        setCharacterAttribute(characterName, 'san', result.newSan)
+        await characterService.setAttributes(session, null, {
+          理智: result.newSan
+        })
 
         const successText = result.success ? '成功' : '失败'
         return (
