@@ -40,4 +40,5 @@ target
 
 # WASM build artifacts
 wasm/build/
+wasm/src/version.h
 *.wasm.map

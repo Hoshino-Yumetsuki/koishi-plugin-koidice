@@ -19,9 +19,9 @@
     "wasm"
   ],
   "scripts": {
-    "install:wasm-deps": "pwsh -File ./scripts/install-wasm-deps.ps1",
-    "build:wasm": "pwsh -File ./scripts/build-wasm.ps1",
-    "build:wasm:clean": "pwsh -File ./scripts/build-wasm.ps1 -Clean",
+    "build:wasm": "cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --parallel",
+    "build:wasm:debug": "cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Debug && cmake --build .",
+    "build:wasm:clean": "cd wasm/build && cmake --build . --target clean-all",
     "build:ts": "yarn rolldown -c rolldown.config.js",
     "build": "yarn build:wasm && yarn build:ts",
     "publish": "yarn npm publish",

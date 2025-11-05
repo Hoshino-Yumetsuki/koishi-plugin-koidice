@@ -1,18 +1,53 @@
 cmake_minimum_required(VERSION 3.15)
 project(DiceWasm)
 
-# WASM 不支持动态库，全局禁用
+# Set CMake policies
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)
+endif()
+
+# WASM does not support shared libraries, disable globally
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-# 设置C++标准
+# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Emscripten特定设置
+# ============================================
+# Version Generation: Read from package.json
+# ============================================
+set(PACKAGE_JSON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../package.json")
+set(VERSION_HEADER_IN "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in")
+set(VERSION_HEADER_OUT "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h")
+
+# Read package.json and extract version
+file(READ ${PACKAGE_JSON_PATH} PACKAGE_JSON_CONTENT)
+
+# Use relaxed regex to match version number
+string(REGEX MATCH "\"version\"[ \t\r\n]*:[ \t\r\n]*\"([^\"]+)\"" _ "${PACKAGE_JSON_CONTENT}")
+set(DICE_VERSION "${CMAKE_MATCH_1}")
+
+if(NOT DICE_VERSION OR DICE_VERSION STREQUAL "")
+    message(WARNING "Failed to read version from package.json, using default version 0.0.0")
+    set(DICE_VERSION "0.0.0")
+else()
+    message(STATUS "Detected version: ${DICE_VERSION}")
+endif()
+
+# Generate version header using configure_file
+configure_file(
+    ${VERSION_HEADER_IN}
+    ${VERSION_HEADER_OUT}
+    @ONLY
+)
+
+message(STATUS "Generated version header: ${VERSION_HEADER_OUT}")
+
+# Emscripten specific settings
 if(EMSCRIPTEN)
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
 
-    # Emscripten 链接标志
+    # Emscripten link flags
     set(EMSCRIPTEN_LINK_FLAGS
         --bind
         -s WASM=1
@@ -31,18 +66,18 @@ if(EMSCRIPTEN)
         -Wl,--allow-undefined
     )
 
-    # 优化选项
+    # Optimization options
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
         list(APPEND EMSCRIPTEN_LINK_FLAGS -O3 -flto)
     else()
         list(APPEND EMSCRIPTEN_LINK_FLAGS -O0 -g -gsource-map)
     endif()
     
-    # 转换列表为字符串
+    # Convert list to string
     string(REPLACE ";" " " EMSCRIPTEN_LINK_FLAGS_STR "${EMSCRIPTEN_LINK_FLAGS}")
 endif()
 
-# 包含目录
+# Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../Dice/Dice
     ${CMAKE_CURRENT_SOURCE_DIR}/../Dice/quickjspp
@@ -56,42 +91,42 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/zlib
 )
 
-# 收集核心源文件 (排除平台相关和不需要的模块)
+# Collect core source files (exclude platform-specific and unnecessary modules)
 set(DICE_CORE_SOURCES
-    # 核心掷骰
+    # Core dice rolling
     ../Dice/Dice/RD.cpp
     ../Dice/Dice/RandomGenerator.cpp
     ../Dice/Dice/DiceSession.cpp
 
-    # 属性和变量
+    # Attributes and variables
     ../Dice/Dice/DiceAttrVar.cpp
     ../Dice/Dice/strExtern.cpp
 
-    # 规则系统
+    # Rule system
     ../Dice/Dice/GetRule.cpp
 
-    # 牌堆和角色卡
+    # Deck and character cards
     ../Dice/Dice/CardDeck.cpp
     ../Dice/Dice/CharacterCard.cpp
 
-    # 格式化
+    # Formatting
     ../Dice/Dice/DiceFormatter.cpp
     ../Dice/Dice/MsgFormat.cpp
 
-    # JSON处理
+    # JSON processing
     ../Dice/Dice/Jsonio.cpp
 
-    # 文件操作 (简化版)
+    # File operations (simplified)
     ../Dice/Dice/DiceFile.cpp
 
-    # 牌堆系统
+    # Deck system
     ../Dice/Dice/CardDeck.cpp
     
-    # 全局变量（包含规则数据）
+    # Global variables (including rule data)
     ../Dice/Dice/GlobalVar.cpp
 )
 
-# WASM接口源文件
+# WASM interface source files
 set(WASM_SOURCES
     src/dice_wasm_bindings.cpp
     src/dice_roll.cpp
@@ -103,32 +138,60 @@ set(WASM_SOURCES
     src/dice_rule.cpp
 )
 
-# 创建WASM库
+# Create WASM library
 add_executable(dice ${DICE_CORE_SOURCES} ${WASM_SOURCES})
 
-# 设置编译定义
+# Set compile definitions
 target_compile_definitions(dice PRIVATE
     DICE_WASM_BUILD
     CONFIG_BIGNUM
     _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
 )
 
-# 不链接外部依赖库 - 使用 stub 文件
+# Do not link external libraries - use stub files
 
-# 应用Emscripten标志
+# Apply Emscripten flags
 if(EMSCRIPTEN)
-    # 设置链接标志和输出路径
+    # Set link flags and output path
     set_target_properties(dice PROPERTIES
         LINK_FLAGS "${EMSCRIPTEN_LINK_FLAGS_STR}"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../lib"
         OUTPUT_NAME "dice"
     )
     
-    # 设置编译选项
+    # Set compile options
     target_compile_options(dice PRIVATE -fexceptions)
+    
+    # Output build information
+    message(STATUS "=== Dice WASM Build Configuration ===")
+    message(STATUS "Project Root: ${CMAKE_CURRENT_SOURCE_DIR}/..")
+    message(STATUS "WASM Directory: ${CMAKE_CURRENT_SOURCE_DIR}")
+    message(STATUS "Build Directory: ${CMAKE_BINARY_DIR}")
+    message(STATUS "Output Directory: ${CMAKE_CURRENT_SOURCE_DIR}/../lib")
+    message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+    message(STATUS "Version: ${DICE_VERSION}")
+    message(STATUS "======================================")
 endif()
 
-# 安装规则
+# Install rules
 install(TARGETS dice
     RUNTIME DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/../lib
+)
+
+# ============================================
+# Custom Target: Clean All
+# ============================================
+add_custom_target(clean-all
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E echo "Build directory cleaned"
+    COMMENT "Clean all build artifacts"
+)
+
+# ============================================
+# Post-Build: Check Output Files
+# ============================================
+add_custom_command(TARGET dice POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "=== Checking Output Files ==="
+    COMMAND ${CMAKE_COMMAND} -E echo "Output Directory: ${CMAKE_CURRENT_SOURCE_DIR}/../lib"
+    COMMENT "Build completed, checking output files"
 )
