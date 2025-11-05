@@ -15,13 +15,11 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib",
-    "wasm"
+    "lib"
   ],
   "scripts": {
-    "build:wasm": "cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --parallel",
-    "build:wasm:debug": "cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Debug && cmake --build .",
-    "build:wasm:clean": "cd wasm/build && cmake --build . --target clean-all",
+    "build:wasm": "mkdir wasm/build && cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --parallel",
+    "build:wasm:debug": "mkdir wasm/build && cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Debug && cmake --build .",
     "build:ts": "yarn rolldown -c rolldown.config.js",
     "build": "yarn build:wasm && yarn build:ts",
     "publish": "yarn npm publish",
