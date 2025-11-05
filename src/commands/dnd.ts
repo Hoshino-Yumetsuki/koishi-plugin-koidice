@@ -3,9 +3,6 @@ import type { Config } from '../config'
 import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
 
-/**
- * DND人物作成命令 .dnd
- */
 export function registerDNDGeneratorCommand(
   parent: Command,
   _config: Config,

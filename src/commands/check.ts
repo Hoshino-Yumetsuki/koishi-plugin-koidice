@@ -40,7 +40,6 @@ export function registerCheckCommand(
         let finalExpression = expression
         const spaceIndex = expression.lastIndexOf(' ')
 
-        // 如果表达式中没有数字，尝试从人物卡获取
         if (
           spaceIndex === -1 ||
           Number.isNaN(Number(expression.substring(spaceIndex + 1)))
@@ -61,8 +60,6 @@ export function registerCheckCommand(
           }
         }
 
-        // 直接调用 WASM 的 skillCheck 方法
-        // 所有解析和检定逻辑都在 wasm/src/dice_roll.cpp 中实现
         const result: SkillCheckResult = diceAdapter.skillCheck(finalExpression)
 
         if (result.errorCode !== 0) {

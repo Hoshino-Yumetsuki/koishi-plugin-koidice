@@ -1,0 +1,121 @@
+/**
+ * .pc new 创建新人物卡命令
+ */
+import type { Command, Context } from 'koishi'
+import type { DiceAdapter } from '../../wasm'
+import { CharacterService } from '../../services/character-service'
+import { logger } from '../../index'
+
+/**
+ * 注册 .pc new 命令
+ */
+export function registerPcNewCommand(
+  parent: Command,
+  ctx: Context,
+  diceAdapter: DiceAdapter
+) {
+  const characterService = new CharacterService(ctx, diceAdapter)
+
+  parent
+    .subcommand('.pc.new [args:text]', '创建新人物卡')
+    .usage('.pc.new ([模板]:([生成参数]:))([卡名])')
+    .example('.pc.new')
+    .example('.pc.new Alice')
+    .example('.pc.new COC7:Alice')
+    .example('.pc.new COC7:80:Alice')
+    .action(async ({ session }, args) => {
+      try {
+        // 检查人物卡数量限制
+        const allCards = await characterService.getAllCards(session)
+        if (allCards.length >= 16) {
+          return '人物卡数量已达上限（16张），请先删除一些人物卡喵~'
+        }
+
+        let cardType = 'COC7'
+        let cardName = ''
+        let generateParams = ''
+
+        if (args?.trim()) {
+          const parts = args.trim().split(':')
+
+          if (parts.length === 1) {
+            // 只有卡名
+            cardName = parts[0].trim()
+          } else if (parts.length === 2) {
+            // 模板:卡名 或 卡名:参数
+            const first = parts[0].trim().toUpperCase()
+            if (first === 'COC6' || first === 'COC7' || first === 'DND5E') {
+              cardType = first
+              cardName = parts[1].trim()
+            } else {
+              cardName = parts[0].trim()
+              generateParams = parts[1].trim()
+            }
+          } else if (parts.length === 3) {
+            // 模板:参数:卡名
+            cardType = parts[0].trim().toUpperCase()
+            generateParams = parts[1].trim()
+            cardName = parts[2].trim()
+          }
+        }
+
+        // 如果没有指定卡名，生成随机姓名
+        if (!cardName) {
+          const nameResult = diceAdapter.drawFromDeck('调查员姓名', 1)
+          if (nameResult.success && nameResult.cards.length > 0) {
+            cardName = nameResult.cards[0]
+          } else {
+            cardName = `角色_${Date.now().toString(36)}`
+          }
+        }
+
+        // 生成属性
+        let attributes: Record<string, number> = {}
+        if (cardType === 'COC7') {
+          const cocResult = generateParams
+            ? diceAdapter.generateCOC7()
+            : diceAdapter.generateCOC7()
+
+          // 解析COC输出
+          const jsonResult = diceAdapter.parseCOCAttributes(cocResult)
+          if (jsonResult && typeof jsonResult === 'string') {
+            try {
+              attributes = JSON.parse(jsonResult) as Record<string, number>
+            } catch (e) {
+              logger.warn('解析COC属性失败:', e)
+            }
+          }
+        } else if (cardType === 'COC6') {
+          const cocResult = diceAdapter.generateCOC6()
+          const jsonResult = diceAdapter.parseCOCAttributes(cocResult)
+          if (jsonResult && typeof jsonResult === 'string') {
+            try {
+              attributes = JSON.parse(jsonResult) as Record<string, number>
+            } catch (e) {
+              logger.warn('解析COC属性失败:', e)
+            }
+          }
+        }
+
+        // 创建人物卡
+        await characterService.createCard(
+          session,
+          cardName,
+          cardType,
+          attributes
+        )
+
+        const attrText =
+          Object.keys(attributes).length > 0
+            ? `\n已生成属性: ${Object.entries(attributes)
+                .map(([k, v]) => `${k}=${v}`)
+                .join(' ')}`
+            : ''
+
+        return `已创建${cardType}人物卡: ${cardName}${attrText}`
+      } catch (error) {
+        logger.error('创建人物卡错误:', error)
+        return error.message || '创建人物卡时发生错误'
+      }
+    })
+}

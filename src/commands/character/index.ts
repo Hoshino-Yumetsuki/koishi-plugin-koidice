@@ -9,6 +9,7 @@ import { registerStShowCommand } from './st-show'
 import { registerStSwitchCommand } from './st-switch'
 import { registerStDelCommand } from './st-del'
 import { registerStClrCommand } from './st-clr'
+import { registerPcCommands } from '../pc'
 
 export function registerCharacterCommands(
   parent: Command,
@@ -21,6 +22,9 @@ export function registerCharacterCommands(
   registerStClrCommand(parent, ctx, diceAdapter)
 
   registerStSetCommand(parent, ctx, diceAdapter)
+
+  // 注册.pc多人物卡命令
+  registerPcCommands(parent, ctx, diceAdapter)
 }
 
 export * from './types'

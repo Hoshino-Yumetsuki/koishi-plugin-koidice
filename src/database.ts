@@ -64,6 +64,37 @@ export interface Nickname {
 }
 
 /**
+ * 人物卡群组绑定数据模型
+ */
+export interface CharacterBinding {
+  id: number // 自增主键
+  userId: string // 用户 ID
+  platform: string // 平台
+  guildId: string // 群组 ID，空字符串表示全局默认
+  cardName: string // 绑定的人物卡名称
+  createdAt: Date // 创建时间
+  updatedAt: Date // 更新时间
+}
+
+/**
+ * 人物卡掷骰统计数据模型
+ */
+export interface CharacterStats {
+  id: number // 自增主键
+  userId: string // 用户 ID
+  platform: string // 平台
+  cardName: string // 人物卡名称
+  totalRolls: number // 总掷骰次数
+  criticalSuccess: number // 大成功次数
+  extremeSuccess: number // 极难成功次数
+  hardSuccess: number // 困难成功次数
+  regularSuccess: number // 普通成功次数
+  failure: number // 失败次数
+  fumble: number // 大失败次数
+  updatedAt: Date // 更新时间
+}
+
+/**
  * 扩展数据库表
  */
 declare module 'koishi' {
@@ -73,6 +104,8 @@ declare module 'koishi' {
     koidice_initiative: InitiativeList
     koidice_observer: Observer
     koidice_nickname: Nickname
+    koidice_character_binding: CharacterBinding
+    koidice_character_stats: CharacterStats
   }
 }
 
@@ -170,6 +203,49 @@ export function extendDatabase(ctx: Context) {
       autoInc: true,
       primary: 'id',
       unique: [['userId', 'guildId']]
+    }
+  )
+
+  // 人物卡群组绑定表
+  ctx.model.extend(
+    'koidice_character_binding',
+    {
+      id: 'unsigned',
+      userId: 'string',
+      platform: 'string',
+      guildId: 'string',
+      cardName: 'string',
+      createdAt: 'timestamp',
+      updatedAt: 'timestamp'
+    },
+    {
+      autoInc: true,
+      primary: 'id',
+      unique: [['userId', 'platform', 'guildId']]
+    }
+  )
+
+  // 人物卡掷骰统计表
+  ctx.model.extend(
+    'koidice_character_stats',
+    {
+      id: 'unsigned',
+      userId: 'string',
+      platform: 'string',
+      cardName: 'string',
+      totalRolls: 'unsigned',
+      criticalSuccess: 'unsigned',
+      extremeSuccess: 'unsigned',
+      hardSuccess: 'unsigned',
+      regularSuccess: 'unsigned',
+      failure: 'unsigned',
+      fumble: 'unsigned',
+      updatedAt: 'timestamp'
+    },
+    {
+      autoInc: true,
+      primary: 'id',
+      unique: [['userId', 'platform', 'cardName']]
     }
   )
 }
