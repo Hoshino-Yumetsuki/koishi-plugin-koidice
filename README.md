@@ -5,6 +5,8 @@
 
 Dice! 的完整 Koishi 移植版本，通过 WebAssembly 技术将 Dice! 的 C++ 核心移植到 Koishi 平台。
 
+<i>插件处于早期开发阶段，如果存在 Bug 请开 Issue</i>
+
 ## 特性
 
 - **完整的掷骰功能** - 支持复杂的掷骰表达式
