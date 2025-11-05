@@ -20,6 +20,25 @@ export interface COCCheckResult {
 }
 
 /**
+ * 技能检定结果（高级版本，支持完整表达式解析）
+ */
+export interface SkillCheckResult {
+  skillName: string
+  originalSkillValue: number
+  finalSkillValue: number
+  difficulty: number
+  rounds: number
+  results: Array<{
+    rollValue: number
+    skillValue: number
+    successLevel: number
+    description: string
+  }>
+  errorCode: number
+  errorMsg: string
+}
+
+/**
  * 暗骰结果
  */
 export interface HiddenRollResult {
@@ -94,6 +113,7 @@ export interface DiceModule {
   // 核心掷骰功能
   rollDice(expression: string, defaultDice?: number): RollResult
   cocCheck(skillValue: number, bonusDice?: number): COCCheckResult
+  skillCheck(expression: string, rule?: number): SkillCheckResult
   hiddenRoll(expression: string, defaultDice?: number): HiddenRollResult
   getMaxValue(expression: string, defaultDice?: number): number
   getMinValue(expression: string, defaultDice?: number): number

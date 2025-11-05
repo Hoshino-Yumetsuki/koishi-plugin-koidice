@@ -32,6 +32,7 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     // 核心掷骰功能
     function("rollDice", &rollDice);
     function("cocCheck", &cocCheck);
+    function("skillCheck", &skillCheck);
     function("hiddenRoll", &hiddenRoll);
     function("getMaxValue", &getMaxValue);
     function("getMinValue", &getMinValue);

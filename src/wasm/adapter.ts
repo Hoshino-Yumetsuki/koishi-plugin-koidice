@@ -3,6 +3,7 @@ import type {
   DiceModule,
   RollResult,
   COCCheckResult,
+  SkillCheckResult,
   SanityCheckResult,
   InitiativeRollResult,
   InitiativeTurnResult,
@@ -139,6 +140,17 @@ export class DiceAdapter {
   cocCheck(skillValue: number, bonusDice = 0): COCCheckResult {
     const module = this.ensureModule()
     return module.cocCheck(skillValue, bonusDice)
+  }
+
+  /**
+   * 技能检定（高级版本，支持完整表达式解析）
+   * @param expression 检定表达式，如 "困难理智 50" 或 "3#p理智 50"
+   * @param rule 房规（0-7，默认1）
+   * @returns 检定结果
+   */
+  skillCheck(expression: string, rule = 1): SkillCheckResult {
+    const module = this.ensureModule()
+    return module.skillCheck(expression, rule)
   }
 
   /**

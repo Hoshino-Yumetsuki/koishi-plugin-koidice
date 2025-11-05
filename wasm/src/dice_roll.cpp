@@ -2,6 +2,7 @@
 #include "../../Dice/Dice/RD.h"
 #include "../../Dice/Dice/RandomGenerator.h"
 #include <emscripten/val.h>
+#include <regex>
 
 using namespace emscripten;
 
@@ -163,6 +164,164 @@ val cocCheck(int skillValue, int bonusDice) {
         result.set("errorMsg", "未知异常");
     }
 
+    return result;
+}
+
+val skillCheck(const std::string& expression, int rule) {
+    ensureRandomInit();
+    val result = val::object();
+    
+    try {
+        // 解析表达式格式: [轮数#][奖惩][难度]技能名 [技能值]
+        std::string expr = expression;
+        int rounds = 1;
+        int bonusDice = 0;
+        int difficulty = 1;  // 1=普通, 2=困难, 5=极难
+        bool autoSuccess = false;
+        
+        // 解析轮数和奖惩骰 (例: 3#p, 2#b) - 参考 DiceEvent.cpp 的解析逻辑
+        std::regex roundRegex("^(\\d+)#([pb]?)(.+)$", std::regex::icase);
+        std::smatch roundMatch;
+        if (std::regex_match(expr, roundMatch, roundRegex)) {
+            rounds = std::min(std::stoi(roundMatch[1].str()), 9);
+            std::string bonusType = roundMatch[2].str();
+            if (bonusType == "p" || bonusType == "P") bonusDice = -1;
+            else if (bonusType == "b" || bonusType == "B") bonusDice = 1;
+            expr = roundMatch[3].str();
+        }
+        
+        // 去除空格
+        expr.erase(0, expr.find_first_not_of(" \t\n\r"));
+        expr.erase(expr.find_last_not_of(" \t\n\r") + 1);
+        
+        // 解析难度关键词 - 参考 DiceEvent.cpp 3623-3638行
+        if (expr.find("自动成功") == 0) {
+            autoSuccess = true;
+            expr = expr.substr(12);
+        } else if (expr.find("困难") == 0) {
+            difficulty = 2;
+            expr = expr.substr(6);
+        } else if (expr.find("极难") == 0 || expr.find("极限") == 0) {
+            difficulty = 5;
+            expr = expr.substr(6);
+        }
+        
+        expr.erase(0, expr.find_first_not_of(" \t\n\r"));
+        
+        // 分离技能名和技能值
+        size_t spacePos = expr.find(' ');
+        std::string skillName;
+        int skillValue = 0;
+        
+        if (spacePos != std::string::npos) {
+            skillName = expr.substr(0, spacePos);
+            std::string valueStr = expr.substr(spacePos + 1);
+            valueStr.erase(0, valueStr.find_first_not_of(" \t\n\r"));
+            
+            try {
+                skillValue = std::stoi(valueStr);
+            } catch (...) {
+                result.set("errorCode", Input_Err);
+                result.set("errorMsg", "技能值格式错误");
+                result.set("skillName", skillName);
+                return result;
+            }
+        } else {
+            result.set("errorCode", Input_Err);
+            result.set("errorMsg", "缺少技能值");
+            return result;
+        }
+        
+        // 验证技能值并应用难度修正 - 参考 DiceEvent.cpp 3692-3696行
+        int finalSkillValue = skillValue / difficulty;
+        if (finalSkillValue < 0 || finalSkillValue > 1000) {
+            result.set("errorCode", Input_Err);
+            result.set("errorMsg", "技能值必须在0-1000之间");
+            result.set("skillName", skillName);
+            result.set("skillValue", skillValue);
+            return result;
+        }
+        
+        // 执行检定 - 使用 RD 类和 RollSuccessLevel 函数
+        val results = val::array();
+        RD rdMainDice("1D100", 100);
+        
+        for (int i = 0; i < rounds; i++) {
+            // 掷骰 - 参考 DiceEvent.cpp 3718行
+            int_errno err = rdMainDice.Roll();
+            if (err != 0) {
+                result.set("errorCode", static_cast<int>(err));
+                result.set("errorMsg", getErrorMessage(err));
+                return result;
+            }
+            
+            int rollValue = rdMainDice.intTotal;
+            
+            // 应用奖励/惩罚骰 - 使用 cocCheck 中已有的逻辑
+            if (bonusDice != 0) {
+                int tensDigit = (rollValue / 10) * 10;
+                int onesDigit = rollValue % 10;
+                
+                if (bonusDice > 0) {
+                    for (int j = 0; j < bonusDice; j++) {
+                        RD bonusRd("1D10", 10);
+                        bonusRd.Roll();
+                        int newTens = (bonusRd.intTotal % 10) * 10;
+                        if (newTens < tensDigit) tensDigit = newTens;
+                    }
+                } else {
+                    for (int j = 0; j < -bonusDice; j++) {
+                        RD penaltyRd("1D10", 10);
+                        penaltyRd.Roll();
+                        int newTens = (penaltyRd.intTotal % 10) * 10;
+                        if (newTens > tensDigit) tensDigit = newTens;
+                    }
+                }
+                rollValue = tensDigit + onesDigit;
+            }
+            
+            // 使用 RD.cpp 中的 RollSuccessLevel 函数判定 - 参考 DiceEvent.cpp 3724行
+            SuccessLevel successLevel = autoSuccess && rollValue <= finalSkillValue 
+                ? SuccessLevel::RegularSuccess 
+                : RollSuccessLevel(rollValue, finalSkillValue, rule);
+            
+            val roundResult = val::object();
+            roundResult.set("rollValue", rollValue);
+            roundResult.set("skillValue", finalSkillValue);
+            roundResult.set("successLevel", static_cast<int>(successLevel));
+            
+            // 设置描述 - 参考 DiceEvent.cpp 3725-3741行
+            std::string description;
+            switch (successLevel) {
+                case SuccessLevel::Fumble: description = "大失败"; break;
+                case SuccessLevel::Failure: description = autoSuccess ? "成功" : "失败"; break;
+                case SuccessLevel::RegularSuccess: description = "成功"; break;
+                case SuccessLevel::HardSuccess: description = "困难成功"; break;
+                case SuccessLevel::ExtremeSuccess: description = "极难成功"; break;
+                case SuccessLevel::Critical: description = "大成功"; break;
+            }
+            roundResult.set("description", description);
+            
+            results.call<void>("push", roundResult);
+        }
+        
+        result.set("skillName", skillName);
+        result.set("originalSkillValue", skillValue);
+        result.set("finalSkillValue", finalSkillValue);
+        result.set("difficulty", difficulty);
+        result.set("rounds", rounds);
+        result.set("results", results);
+        result.set("errorCode", 0);
+        result.set("errorMsg", "");
+        
+    } catch (const std::exception& e) {
+        result.set("errorCode", -1);
+        result.set("errorMsg", std::string("异常: ") + e.what());
+    } catch (...) {
+        result.set("errorCode", -1);
+        result.set("errorMsg", "未知异常");
+    }
+    
     return result;
 }
 

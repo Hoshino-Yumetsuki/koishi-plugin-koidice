@@ -1,58 +1,72 @@
 import type { Command, Context } from 'koishi'
 import type { Config } from '../config'
-import { DiceAdapter } from '../wasm'
-import type { COCCheckResult, RollResult } from '../wasm'
+import type { DiceAdapter } from '../wasm'
+import type { RollResult } from '../wasm'
 import { logger } from '../index'
 import { CharacterService } from '../services/character-service'
 
 /**
- * COC检定命令 .rc
+ * 解析成长检定参数
+ * 支持格式:
+ * .en 技能名 - 从人物卡获取技能值
+ * .en 技能名 技能值 - 指定技能值
+ * .en 技能名 技能值 原因 - 带原因
+ * .en 技能名 +1D3/1D10 原因 - Pulp规则特殊成长
  */
-export function registerCOCCheckCommand(
-  parent: Command,
-  _ctx: Context,
-  _config: Config,
-  diceAdapter: DiceAdapter
-) {
-  parent
-    .subcommand('.rc <skill:number>', 'COC技能检定')
-    .alias('.check')
-    .option('bonus', '-b <bonus:number> 奖励骰数')
-    .option('penalty', '-p <penalty:number> 惩罚骰数')
-    .option('reason', '-r <reason:text> 检定原因')
-    .action(async ({ session, options }, skill) => {
-      if (!skill || skill < 0 || skill > 100) {
-        return '技能值必须在0-100之间'
-      }
+interface ParsedGrowthArgs {
+  skillName: string
+  skillValue?: number
+  growthFormula?: string // Pulp规则的成长公式，如 +1D3/1D10
+  reason?: string
+}
 
-      try {
-        let bonusDice = 0
-        if (options.bonus) bonusDice = options.bonus
-        if (options.penalty) bonusDice = -options.penalty
+function parseGrowthCommand(args: string[]): ParsedGrowthArgs | null {
+  if (args.length === 0) {
+    return null
+  }
 
-        const result: COCCheckResult = diceAdapter.cocCheck(skill, bonusDice)
+  const result: ParsedGrowthArgs = {
+    skillName: args[0]
+  }
 
-        if (result.errorCode !== 0) {
-          return `检定失败: ${result.errorMsg}`
-        }
+  if (args.length === 1) {
+    // 只有技能名
+    return result
+  }
 
-        const parts = [session.username]
-        if (options.reason) {
-          parts.push(options.reason)
-        }
-        parts.push(`${result.rollValue}/${result.skillValue}`)
-        parts.push(DiceAdapter.formatSuccessLevel(result.successLevel))
+  // 检查第二个参数
+  const secondArg = args[1]
 
-        return parts.join(' ')
-      } catch (error) {
-        logger.error('COC检定错误:', error)
-        return '检定时发生错误'
-      }
-    })
+  // 检查是否是Pulp规则的成长公式（如 +1D3/1D10）
+  if (secondArg.match(/^\+\d*[dD]\d+\/\d*[dD]\d+$/)) {
+    result.growthFormula = secondArg
+    if (args.length > 2) {
+      result.reason = args.slice(2).join(' ')
+    }
+    return result
+  }
+
+  // 尝试解析为数字
+  const skillValueNum = parseFloat(secondArg)
+  if (!Number.isNaN(skillValueNum)) {
+    result.skillValue = skillValueNum
+    if (args.length > 2) {
+      result.reason = args.slice(2).join(' ')
+    }
+    return result
+  }
+
+  // 第二个参数不是数字也不是成长公式，作为原因
+  result.reason = args.slice(1).join(' ')
+  return result
 }
 
 /**
  * 成长检定命令 .en
+ * COC规则，用法：
+ * .en [技能名称]([技能值]) - 已经.st时，可省略最后的参数,调用人物卡属性时，成长后的值会自动更新
+ * .en 教育 60 教育增强 - 指定技能值和原因
+ * .en 幸运 +1D3/1D10 幸运成长 - Pulp规则中的幸运成长
  */
 export function registerGrowthCommand(
   parent: Command,
@@ -63,50 +77,111 @@ export function registerGrowthCommand(
   const characterService = new CharacterService(ctx, diceAdapter)
 
   parent
-    .subcommand('.en <skill:text>', '成长检定')
-    .action(async ({ session }, skill) => {
-      if (!skill) {
-        return '请指定技能名称'
+    .subcommand('.en [...args:text]', '成长检定')
+    .usage('用法: .en [技能名称]([技能值]) [原因]')
+    .example('.en 教育 - 从人物卡获取教育值进行成长检定')
+    .example('.en 教育 60 - 对教育60进行成长检定')
+    .example('.en 教育 60 教育增强 - 带原因的成长检定')
+    .example('.en 幸运 +1D3/1D10 幸运成长 - Pulp规则的特殊成长')
+    .action(async ({ session }, ...args) => {
+      const parsed = parseGrowthCommand(args)
+      if (!parsed) {
+        return '请指定技能名称\n用法: .en [技能名称]([技能值]) [原因]'
       }
 
       try {
-        // 获取当前技能值
-        const attributes = await characterService.getAttributes(session, null)
-        if (!attributes || !(String(skill) in attributes)) {
-          return `未找到技能 ${skill}，请先使用 .st.set ${skill} <值> 设置`
+        // 确定最终的技能值
+        let currentValue = parsed.skillValue
+        let shouldUpdateCard = false
+
+        // 如果没有指定技能值，从人物卡获取
+        if (currentValue === undefined) {
+          const attributes = await characterService.getAttributes(session, null)
+          if (!attributes || !(parsed.skillName in attributes)) {
+            return `未找到技能 ${parsed.skillName}，请先使用 .st.set ${parsed.skillName} <值> 设置，或直接指定技能值`
+          }
+          currentValue = attributes[parsed.skillName]
+          shouldUpdateCard = true
         }
 
-        const currentValue = attributes[String(skill)]
+        // 验证技能值范围
+        if (currentValue < 0 || currentValue > 1000) {
+          return '技能值必须在0-1000之间'
+        }
 
         // 成长检定: 1d100 > 当前技能值
-        const result: RollResult = diceAdapter.roll('1d100', 100)
+        const checkResult: RollResult = diceAdapter.roll('1d100', 100)
 
-        if (result.errorCode !== 0) {
-          return `检定失败: ${result.errorMsg}`
+        if (checkResult.errorCode !== 0) {
+          return `检定失败: ${checkResult.errorMsg}`
         }
 
-        const rollValue = result.total
+        const rollValue = checkResult.total
+
+        // 构建输出消息的基础部分
+        const messageParts = [session.username, parsed.skillName]
+        if (parsed.reason) {
+          messageParts.push(parsed.reason)
+        }
+        messageParts.push('成长检定')
 
         if (rollValue > currentValue) {
           // 成功，进行成长
-          const growthResult: RollResult = diceAdapter.roll('1d10', 10)
-          const growth = growthResult.total
+          let growth: number
+          let growthDetail: string
+
+          if (parsed.growthFormula) {
+            // Pulp规则的特殊成长（如 +1D3/1D10）
+            // 解析公式 +1D3/1D10 为两个骰子表达式
+            const formulaMatch = parsed.growthFormula.match(
+              /^\+(\d*[dD]\d+)\/(\d*[dD]\d+)$/
+            )
+            if (!formulaMatch) {
+              return `成长公式格式错误: ${parsed.growthFormula}`
+            }
+
+            const dice1 = formulaMatch[1]
+            const dice2 = formulaMatch[2]
+
+            const result1: RollResult = diceAdapter.roll(dice1, 100)
+            const result2: RollResult = diceAdapter.roll(dice2, 100)
+
+            if (result1.errorCode !== 0 || result2.errorCode !== 0) {
+              return '成长骰子投掷失败'
+            }
+
+            // 取两个结果中的较大值
+            growth = Math.max(result1.total, result2.total)
+            growthDetail = `${dice1}=${result1.total} / ${dice2}=${result2.total}`
+          } else {
+            // 标准成长: 1d10
+            const growthResult: RollResult = diceAdapter.roll('1d10', 10)
+            if (growthResult.errorCode !== 0) {
+              return '成长骰子投掷失败'
+            }
+            growth = growthResult.total
+            growthDetail = `1d10=${growth}`
+          }
+
           const newValue = Math.min(currentValue + growth, 99)
 
-          await characterService.setAttributes(session, null, {
-            [String(skill)]: newValue
-          })
+          // 如果从人物卡获取的值，更新人物卡
+          if (shouldUpdateCard) {
+            await characterService.setAttributes(session, null, {
+              [parsed.skillName]: newValue
+            })
+          }
 
           return (
-            `${session.username} ${skill} 成长检定\n` +
+            `${messageParts.join(' ')}\n` +
             `${rollValue}/${currentValue} 成功\n` +
-            `${skill} 增长 ${growth} 点: ${currentValue} → ${newValue}`
+            `${parsed.skillName} 增长 ${growth} 点 (${growthDetail}): ${currentValue} → ${newValue}`
           )
         } else {
           return (
-            `${session.username} ${skill} 成长检定\n` +
+            `${messageParts.join(' ')}\n` +
             `${rollValue}/${currentValue} 失败\n` +
-            `${skill} 未能成长`
+            `${parsed.skillName} 未能成长`
           )
         }
       } catch (error) {
