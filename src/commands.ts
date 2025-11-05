@@ -5,6 +5,7 @@ import { logger } from './index'
 import {
   registerRollCommand,
   registerCOCCheckCommand,
+  registerCheckCommand,
   registerGrowthCommand,
   registerCOCGeneratorCommand,
   registerSanityCheckCommand,
@@ -50,6 +51,7 @@ export async function registerCommands(ctx: Context, config: Config) {
   registerDeckCommands(koidice, config, diceAdapter)
   registerAttributeCharacterCommands(koidice, ctx, diceAdapter)
   registerRollCommand(koidice, config, diceAdapter)
+  registerCheckCommand(koidice, ctx, config, diceAdapter)
 
   if (config.enableCOC) {
     registerCOCCheckCommand(koidice, config, diceAdapter)
