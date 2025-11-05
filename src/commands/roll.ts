@@ -1,9 +1,9 @@
 import type { Command, Context } from 'koishi'
 import type { Config } from '../config'
-import type { DiceAdapter } from '../wasm'
-import type { RollResult } from '../wasm'
+import type { DiceAdapter, RollResult } from '../wasm'
 import { logger } from '../index'
 import { CharacterService } from '../services/character-service'
+import { getObservers } from './observer'
 
 /**
  * 掷骰命令 .r / .rh / .rs
@@ -32,6 +32,7 @@ export function registerRollCommand(
     .action(async ({ session }, ...args) => {
       return await handleRollCommand(
         session,
+        ctx,
         characterService,
         diceAdapter,
         config,
@@ -48,6 +49,7 @@ export function registerRollCommand(
     .action(async ({ session }, ...args) => {
       return await handleRollCommand(
         session,
+        ctx,
         characterService,
         diceAdapter,
         config,
@@ -64,6 +66,7 @@ export function registerRollCommand(
     .action(async ({ session }, ...args) => {
       return await handleRollCommand(
         session,
+        ctx,
         characterService,
         diceAdapter,
         config,
@@ -80,6 +83,7 @@ export function registerRollCommand(
     .action(async ({ session }, ...args) => {
       return await handleRollCommand(
         session,
+        ctx,
         characterService,
         diceAdapter,
         config,
@@ -91,11 +95,11 @@ export function registerRollCommand(
 }
 
 /**
- * 处理掷骰命令
- * 参考 DiceEvent.cpp 4391-4500行
+ * 处理掷骰命令的通用函数
  */
 async function handleRollCommand(
   session: any,
+  ctx: Context,
   characterService: CharacterService,
   diceAdapter: DiceAdapter,
   config: Config,
@@ -167,12 +171,63 @@ async function handleRollCommand(
       }
     }
 
-    // 暗骰处理
+    // 暗骰处理（参考 DiceEvent.cpp 4378-4388行）
     if (isHidden) {
-      diceAdapter.hiddenRoll(expression, config.defaultDice)
-      const parts = [session.username, '进行了暗骰']
-      if (reason) parts.push(reason)
-      return parts.join(' ')
+      // 检查是否在群聊中
+      if (!session.channelId) {
+        // 私聊时禁用暗骰，转为普通掷骰
+        isHidden = false
+      } else {
+        // 执行掷骰
+        const result: RollResult = diceAdapter.roll(
+          expression,
+          config.defaultDice
+        )
+
+        if (result.errorCode !== 0) {
+          return `掷骰失败: ${result.errorMsg}`
+        }
+
+        // 构建详细结果消息
+        const detailParts = [session.username]
+        if (reason) {
+          detailParts.push(reason)
+        }
+        detailParts.push(isSimple ? result.total.toString() : result.detail)
+        const detailMessage = detailParts.join(' ')
+
+        // 私发给掷骰者本人
+        try {
+          await session.bot.sendPrivateMessage(session.userId, detailMessage)
+        } catch (error) {
+          logger.warn(`私发暗骰结果给 ${session.userId} 失败:`, error)
+        }
+
+        // 私发给所有旁观者
+        try {
+          const observers = await getObservers(
+            ctx,
+            session.channelId,
+            session.platform
+          )
+          for (const observerId of observers) {
+            if (observerId !== session.userId) {
+              try {
+                await session.bot.sendPrivateMessage(observerId, detailMessage)
+              } catch (error) {
+                logger.warn(`私发暗骰结果给旁观者 ${observerId} 失败:`, error)
+              }
+            }
+          }
+        } catch (error) {
+          logger.error('获取旁观者列表失败:', error)
+        }
+
+        // 群聊显示提示消息
+        const publicParts = [session.username, '进行了暗骰']
+        if (reason) publicParts.push(reason)
+        return publicParts.join(' ')
+      }
     }
 
     // 执行掷骰 - 参考 DiceEvent.cpp 4461-4500行

@@ -6,7 +6,7 @@ import { logger } from '../index'
 /**
  * 获取频道的旁观者列表
  */
-async function getObservers(
+export async function getObservers(
   ctx: Context,
   channelId: string,
   platform: string
