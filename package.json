@@ -18,8 +18,8 @@
     "lib"
   ],
   "scripts": {
-    "build:wasm": "mkdir wasm/build && cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --parallel",
-    "build:wasm:debug": "mkdir wasm/build && cd wasm/build && emcmake cmake .. -DCMAKE_BUILD_TYPE=Debug && cmake --build .",
+    "build:wasm": "powershell -Command \"New-Item -ItemType Directory -Force -Path wasm/build | Out-Null; Set-Location wasm/build; emcmake cmake .. -DCMAKE_BUILD_TYPE=Release; cmake --build . --parallel\"",
+    "build:wasm:debug": "powershell -Command \"New-Item -ItemType Directory -Force -Path wasm/build | Out-Null; Set-Location wasm/build; emcmake cmake .. -DCMAKE_BUILD_TYPE=Debug; cmake --build .\"",
     "build:ts": "yarn rolldown -c rolldown.config.js",
     "build": "yarn build:wasm && yarn build:ts",
     "publish": "yarn npm publish",
