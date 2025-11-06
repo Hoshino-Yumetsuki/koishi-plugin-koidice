@@ -8,7 +8,7 @@ namespace tinyxml2 {
     enum XMLError {
         XML_SUCCESS = 0
     };
-    
+
     class XMLElement {
     public:
         const char* Attribute(const char*) const { return nullptr; }
@@ -17,7 +17,7 @@ namespace tinyxml2 {
         XMLElement* NextSiblingElement() const { return nullptr; }
         XMLElement* FirstChildElement() const { return nullptr; }
     };
-    
+
     class XMLDocument {
     public:
         XMLError LoadFile(const char*) { return XML_SUCCESS; }

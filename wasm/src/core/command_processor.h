@@ -18,7 +18,7 @@ public:
      * - .r 3#1d6 伤害
      * - .rh 1d100 （暗骰）
      * - .rs 1d10+3 （简化输出）
-     * 
+     *
      * @param rawCommand 原始命令字符串（不含命令前缀）
      * @param userId 用户ID
      * @param channelId 频道ID（私聊为空）
@@ -45,7 +45,7 @@ public:
      * - .rc 3#技能名 成功率
      * - .rc 3#b技能名 成功率 （奖励骰）
      * - .rc 3#p技能名 成功率 （惩罚骰）
-     * 
+     *
      * @param rawCommand 原始命令字符串
      * @param userId 用户ID
      * @param rule COC房规（0-5）
@@ -60,7 +60,7 @@ public:
     /**
      * 处理COC检定命令（简化版）
      * 格式：.coc 技能值 [奖惩骰数量]
-     * 
+     *
      * @param skillValue 技能值
      * @param bonusDice 奖励/惩罚骰数量（正数=奖励，负数=惩罚）
      * @return JS对象，包含检定结果

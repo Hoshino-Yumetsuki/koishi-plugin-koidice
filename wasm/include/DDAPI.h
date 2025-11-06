@@ -11,8 +11,8 @@
 namespace DD {
     inline int64_t getLoginID() { return 0; }
     inline bool isGroupAdmin(int64_t, int64_t, bool) { return false; }
-    
-    inline auto getGroupMemberList(int64_t) { 
+
+    inline auto getGroupMemberList(int64_t) {
         struct EmptyList {
             struct Iterator {
                 bool operator!=(const Iterator&) const { return false; }
@@ -23,6 +23,6 @@ namespace DD {
             Iterator begin() const { return Iterator(); }
             Iterator end() const { return Iterator(); }
         };
-        return EmptyList(); 
+        return EmptyList();
     }
 }

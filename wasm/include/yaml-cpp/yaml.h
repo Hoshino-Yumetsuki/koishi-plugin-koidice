@@ -10,10 +10,10 @@ namespace YAML {
     class Node {
     private:
         static Node _dummy;
-        
+
     public:
         void* m_pNode = nullptr;
-        
+
         // 键值对成员（引用到dummy对象）
         Node& first = _dummy;
         Node& second = _dummy;
@@ -21,15 +21,15 @@ namespace YAML {
         Node() = default;
         Node(const Node&) = default;
         Node(Node&&) = default;
-        
+
         // 自定义赋值运算符（忽略引用成员）
         Node& operator=(const Node&) { return *this; }
         Node& operator=(Node&&) { return *this; }
-        
+
         bool IsScalar() const { return false; }
         bool IsMap() const { return false; }
         bool IsSequence() const { return false; }
-        
+
         std::string Scalar() const { return ""; }
 
         Node operator[](const std::string&) const { return Node(); }
@@ -50,7 +50,7 @@ namespace YAML {
         Node& operator++() { return *this; }
         Node& operator*() { return *this; }
     };
-    
+
     inline Node Node::_dummy;
 
     template<typename T>

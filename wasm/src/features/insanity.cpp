@@ -15,21 +15,21 @@ static int calculateSuccessLevel(int rollValue, int skillValue, int rule = 1) {
     if (rollValue <= 5 && rollValue <= skillValue) {
         return 5; // 大成功
     }
-    
+
     // 大失败判定
     if (rollValue == 100 || (rollValue > 95 && rollValue > skillValue)) {
         return 0; // 大失败
     }
-    
+
     // 失败
     if (rollValue > skillValue) {
         return 1; // 失败
     }
-    
+
     // 成功等级判定
     int hardThreshold = skillValue / 2;
     int extremeThreshold = skillValue / 5;
-    
+
     if (rollValue <= extremeThreshold) {
         return 4; // 极难成功
     } else if (rollValue <= hardThreshold) {

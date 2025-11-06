@@ -16,14 +16,14 @@ emscripten::val CommandProcessor::processRoll(
     int defaultDice
 ) {
     ensureRandomInit();
-    
+
     std::string expression;
     std::string reason;
     int rounds = 1;
-    
+
     // 解析命令
     parseRollExpression(rawCommand, expression, reason, rounds, defaultDice);
-    
+
     // 调用掷骰处理器
     return RollHandler::roll(expression, reason, rounds, isHidden, isSimple, defaultDice);
 }
@@ -34,17 +34,17 @@ emscripten::val CommandProcessor::processCheck(
     int rule
 ) {
     ensureRandomInit();
-    
+
     std::string skillName;
     int skillValue = 0;
     int rounds = 1;
     int bonusDice = 0;
     Difficulty difficulty = Difficulty::Normal;
     bool autoSuccess = false;
-    
+
     // 解析命令
     parseCheckExpression(rawCommand, skillName, skillValue, rounds, bonusDice, difficulty, autoSuccess);
-    
+
     // 调用检定处理器
     return CheckHandler::check(skillName, skillValue, rounds, bonusDice, difficulty, autoSuccess, rule);
 }
@@ -62,33 +62,33 @@ void CommandProcessor::parseRollExpression(
     int defaultDice
 ) {
     std::string trimmedInput = trim(input);
-    
+
     if (trimmedInput.empty()) {
         expression = "1d" + std::to_string(defaultDice);
         reason = "";
         rounds = 1;
         return;
     }
-    
+
     // 解析多轮掷骰：3#1d6
     std::regex roundsRegex(R"(^(\d+)#(.+)$)");
     std::smatch match;
-    
+
     if (std::regex_match(trimmedInput, match, roundsRegex)) {
         rounds = std::stoi(match[1].str());
         if (rounds > 10) rounds = 10;
         if (rounds < 1) rounds = 1;
         trimmedInput = match[2].str();
     }
-    
+
     // 分离表达式和原因
     // 表达式包含：数字、d、D、+、-、*、/、(、)、b、B、p、P、k、K
     std::regex exprRegex(R"(^([\d#dpbkDPBK+\-*/()\s]+)(.*)$)");
-    
+
     if (std::regex_match(trimmedInput, match, exprRegex)) {
         expression = trim(match[1].str());
         reason = trim(match[2].str());
-        
+
         // 如果表达式只是纯数字，视为原因
         if (std::regex_match(expression, std::regex(R"(^\d+$)"))) {
             reason = trimmedInput;
@@ -98,7 +98,7 @@ void CommandProcessor::parseRollExpression(
         reason = trimmedInput;
         expression = "";
     }
-    
+
     // 如果没有表达式，使用默认
     if (expression.empty()) {
         expression = "1d" + std::to_string(defaultDice);
@@ -115,11 +115,11 @@ void CommandProcessor::parseCheckExpression(
     bool& autoSuccess
 ) {
     std::string expr = trim(input);
-    
+
     // 解析轮数和奖惩骰：3#b技能名 60
     std::regex roundsRegex(R"(^(\d+)#([pb]?)(.+)$)", std::regex::icase);
     std::smatch match;
-    
+
     if (std::regex_match(expr, match, roundsRegex)) {
         rounds = std::min(std::stoi(match[1].str()), 10);
         std::string bonusType = match[2].str();
@@ -127,9 +127,9 @@ void CommandProcessor::parseCheckExpression(
         else if (bonusType == "b" || bonusType == "B") bonusDice = 1;
         expr = match[3].str();
     }
-    
+
     expr = trim(expr);
-    
+
     // 解析难度关键词
     if (startsWith(expr, "自动成功")) {
         autoSuccess = true;
@@ -141,15 +141,15 @@ void CommandProcessor::parseCheckExpression(
         difficulty = Difficulty::Extreme;
         expr = expr.substr(6); // "极难"/"极限" = 6 bytes
     }
-    
+
     expr = trim(expr);
-    
+
     // 分离技能名和技能值
     size_t spacePos = expr.find_last_of(' ');
     if (spacePos != std::string::npos) {
         skillName = trim(expr.substr(0, spacePos));
         std::string valueStr = trim(expr.substr(spacePos + 1));
-        
+
         try {
             skillValue = std::stoi(valueStr);
         } catch (...) {

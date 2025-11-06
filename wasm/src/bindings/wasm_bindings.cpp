@@ -56,10 +56,6 @@ bool initialize() {
     }
 }
 
-std::string getVersion() {
-    return "1.0.0"; // 从version.h读取
-}
-
 // ============ Emscripten绑定 ============
 
 EMSCRIPTEN_BINDINGS(dice_module) {
@@ -67,7 +63,7 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("processRoll", &CommandProcessor::processRoll);
     function("processCheck", &CommandProcessor::processCheck);
     function("processCOCCheck", &CommandProcessor::processCOCCheck);
-    
+
     // === 基础掷骰 ===
     function("rollDice", &rollDice);
     function("cocCheck", &cocCheck);
@@ -75,7 +71,7 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("hiddenRoll", &hiddenRoll);
     function("getMaxValue", &getMaxValue);
     function("getMinValue", &getMinValue);
-    
+
     // === 角色生成 ===
     function("generateCOC7Character", &generateCOC7Character);
     function("generateCOC6Character", &generateCOC6Character);
@@ -84,14 +80,14 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("generateCOC7Multiple", &generateCOC7Multiple);
     function("generateCOC6Multiple", &generateCOC6Multiple);
     function("generateDNDCharacter", &generateDNDCharacter);
-    
+
     // === 理智检定 ===
     function("sanityCheck", &sanityCheck);
     function("getTempInsanity", &getTempInsanity);
     function("getLongInsanity", &getLongInsanity);
     function("getPhobia", &getPhobia);
     function("getMania", &getMania);
-    
+
     // === 先攻系统 ===
     function("addInitiative", &addInitiative);
     function("rollInitiative", &rollInitiative);
@@ -102,28 +98,27 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("getInitiativeCount", &getInitiativeCount);
     function("serializeInitiative", &serializeInitiative);
     function("deserializeInitiative", &deserializeInitiative);
-    
+
     // === 牌堆系统 ===
     function("drawFromDeck", &drawFromDeck);
     function("shuffleDeck", &shuffleDeck);
     function("listDecks", &listDecks);
     function("getDeckSize", &getDeckSize);
     function("deckExists", &deckExists);
-    
+
     // === 规则查询 ===
     function("queryRule", &queryRule);
     function("queryRuleBySystem", &queryRuleBySystem);
     function("listRuleKeys", &listRuleKeys);
     function("listRulesBySystem", &listRulesBySystem);
-    
+
     // === 人物卡解析 ===
     function("parseCOCAttributes", &parseCOCAttributes);
     function("normalizeAttributeName", &normalizeAttributeName);
-    
+
     // === 工具函数 ===
     function("initialize", &initialize);
-    function("getVersion", &getVersion);
-    
+
     // === 注册容器 ===
     register_vector<std::string>("VectorString");
 }

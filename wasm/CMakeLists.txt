@@ -72,7 +72,7 @@ if(EMSCRIPTEN)
     else()
         list(APPEND EMSCRIPTEN_LINK_FLAGS -O0 -g -gsource-map)
     endif()
-    
+
     # Convert list to string
     string(REPLACE ";" " " EMSCRIPTEN_LINK_FLAGS_STR "${EMSCRIPTEN_LINK_FLAGS}")
 endif()
@@ -121,7 +121,7 @@ set(DICE_CORE_SOURCES
 
     # Deck system
     ../Dice/Dice/CardDeck.cpp
-    
+
     # Global variables (including rule data)
     ../Dice/Dice/GlobalVar.cpp
 )
@@ -133,7 +133,7 @@ set(WASM_SOURCES
     src/core/command_processor.cpp
     src/core/roll_handler.cpp
     src/core/check_handler.cpp
-    
+
     # Features - 功能模块（新结构）
     src/features/character.cpp
     src/features/insanity.cpp
@@ -141,7 +141,7 @@ set(WASM_SOURCES
     src/features/deck.cpp
     src/features/rule.cpp
     src/dice_character_parse.cpp  # 保留旧文件（如果还需要）
-    
+
     # Bindings - WASM绑定层
     src/bindings/wasm_bindings.cpp
 )
@@ -166,10 +166,10 @@ if(EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../lib"
         OUTPUT_NAME "dice"
     )
-    
+
     # Set compile options
     target_compile_options(dice PRIVATE -fexceptions)
-    
+
     # Output build information
     message(STATUS "=== Dice WASM Build Configuration ===")
     message(STATUS "Project Root: ${CMAKE_CURRENT_SOURCE_DIR}/..")

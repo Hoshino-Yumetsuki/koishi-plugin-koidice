@@ -36,15 +36,15 @@ std::string normalizeAttributeName(const std::string& name) {
         {"hp", "生命"}, {"mp", "魔法"},
         {"db", "伤害加值"}, {"mov", "移动力"}, {"move", "移动力"}
     };
-    
+
     // 转换为小写
     std::string lower = name;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-    
+
     auto it = aliases.find(lower);
     if (it != aliases.end()) {
         return it->second;
     }
-    
+
     return name;
 }

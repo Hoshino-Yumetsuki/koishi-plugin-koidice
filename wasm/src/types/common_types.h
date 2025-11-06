@@ -34,7 +34,7 @@ struct RollResult {
     std::string detail;
     ErrorCode errorCode;
     std::string errorMsg;
-    
+
     emscripten::val toJS() const;
 };
 
@@ -44,7 +44,7 @@ struct CheckRoundResult {
     int skillValue;
     SuccessLevel successLevel;
     std::string description;
-    
+
     emscripten::val toJS() const;
 };
 
@@ -58,7 +58,7 @@ struct CheckResult {
     std::vector<CheckRoundResult> results;
     ErrorCode errorCode;
     std::string errorMsg;
-    
+
     emscripten::val toJS() const;
 };
 

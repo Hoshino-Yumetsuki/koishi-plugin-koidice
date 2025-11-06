@@ -1,4 +1,4 @@
-import { logger } from '../index'
+import { logger, version } from '../index'
 import type {
   DiceModule,
   RollResult,
@@ -353,11 +353,11 @@ export class DiceAdapter {
   }
 
   /**
-   * 获取版本信息
+   * 获取版本信息（从 package.json 读取）
    */
   getVersion(): string {
-    const module = this.ensureModule()
-    return module.getVersion()
+    // 直接返回从 index.ts 导入的版本号，不需要调用 WASM
+    return version
   }
 
   // ============ 人物作成功能 ============

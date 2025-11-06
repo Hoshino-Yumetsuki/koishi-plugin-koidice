@@ -210,7 +210,6 @@ export interface DiceModule {
   deleteCharacter(characterName: string): boolean
 
   // 工具函数
-  getVersion(): string
   initialize(): boolean
 }
 

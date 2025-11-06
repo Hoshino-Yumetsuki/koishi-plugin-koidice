@@ -18,15 +18,15 @@ struct DeckItem {
 
 std::vector<DeckItem> parseDeckItems(const std::vector<std::string>& deck) {
     std::vector<DeckItem> items;
-    
+
     for (const auto& str : deck) {
         DeckItem item;
         item.weight = 1; // 默认权重为1
-        
+
         // 检查是否有权重标记 ::权重::内容
         size_t l = str.find("::");
         size_t r = (l != std::string::npos) ? str.find("::", l + 2) : std::string::npos;
-        
+
         if (l != std::string::npos && r != std::string::npos) {
             try {
                 std::string weightStr = str.substr(l + 2, r - l - 2);
@@ -49,10 +49,10 @@ std::vector<DeckItem> parseDeckItems(const std::vector<std::string>& deck) {
         } else {
             item.content = str;
         }
-        
+
         items.push_back(item);
     }
-    
+
     return items;
 }
 
@@ -114,7 +114,7 @@ val shuffleDeck(const std::string& deckName, int count) {
 
     try {
         // 检查牌堆是否存在
-        if (CardDeck::mPublicDeck.count(deckName) == 0 && 
+        if (CardDeck::mPublicDeck.count(deckName) == 0 &&
             CardDeck::mExternPublicDeck.count(deckName) == 0) {
             result.set("success", false);
             result.set("message", "牌堆 " + deckName + " 不存在");
@@ -157,12 +157,12 @@ val shuffleDeck(const std::string& deckName, int count) {
 
         // 确定抽取数量
         int drawCount = count;
-        
+
         // count <= 0 表示抽取全部
         if (drawCount <= 0) {
             drawCount = static_cast<int>(expandedDeck.size());
         }
-        
+
         // 限制最大抽取数量
         if (drawCount > static_cast<int>(expandedDeck.size())) {
             drawCount = static_cast<int>(expandedDeck.size());
