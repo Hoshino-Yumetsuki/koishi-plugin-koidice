@@ -76,7 +76,17 @@ val cocCheck(int skillValue, int bonusDice) {
             return result;
         }
 
-        RD rd("1D100", 100);
+        // 使用RD类的B/P骰子功能，直接复用Dice原本的实现
+        std::string expression;
+        if (bonusDice > 0) {
+            expression = std::to_string(bonusDice) + "B";  // B = 奖励骰(Bonus)
+        } else if (bonusDice < 0) {
+            expression = std::to_string(-bonusDice) + "P"; // P = 惩罚骰(Penalty)
+        } else {
+            expression = "1D100";
+        }
+
+        RD rd(expression, 100);
         int_errno err = rd.Roll();
 
         if (err != 0) {
@@ -92,36 +102,6 @@ val cocCheck(int skillValue, int bonusDice) {
         int rollValue = rd.intTotal;
         int successLevel = 1; // 默认失败
         std::string description = "失败";
-
-        // 应用奖励/惩罚骰
-        if (bonusDice != 0) {
-            int tensDigit = (rollValue / 10) * 10;
-            int onesDigit = rollValue % 10;
-
-            if (bonusDice > 0) {
-                // 奖励骰：取最小的十位数
-                for (int i = 0; i < bonusDice; i++) {
-                    RD bonusRd("1D10", 10);
-                    bonusRd.Roll();
-                    int newTens = (bonusRd.intTotal % 10) * 10;
-                    if (newTens < tensDigit) {
-                        tensDigit = newTens;
-                    }
-                }
-            } else {
-                // 惩罚骰：取最大的十位数
-                for (int i = 0; i < -bonusDice; i++) {
-                    RD penaltyRd("1D10", 10);
-                    penaltyRd.Roll();
-                    int newTens = (penaltyRd.intTotal % 10) * 10;
-                    if (newTens > tensDigit) {
-                        tensDigit = newTens;
-                    }
-                }
-            }
-
-            rollValue = tensDigit + onesDigit;
-        }
 
         // 判定成功等级
         if (rollValue <= 5 || (rollValue <= skillValue && rollValue <= 5)) {
@@ -244,41 +224,27 @@ val skillCheck(const std::string& expression, int rule) {
         
         // 执行检定 - 使用 RD 类和 RollSuccessLevel 函数
         val results = val::array();
-        RD rdMainDice("1D100", 100);
         
         for (int i = 0; i < rounds; i++) {
-            // 掷骰 - 参考 DiceEvent.cpp 3718行
-            int_errno err = rdMainDice.Roll();
+            // 使用RD类的B/P骰子功能，直接复用Dice原本的实现
+            std::string rollExpression;
+            if (bonusDice > 0) {
+                rollExpression = std::to_string(bonusDice) + "B";
+            } else if (bonusDice < 0) {
+                rollExpression = std::to_string(-bonusDice) + "P";
+            } else {
+                rollExpression = "1D100";
+            }
+            
+            RD rdRoll(rollExpression, 100);
+            int_errno err = rdRoll.Roll();
             if (err != 0) {
                 result.set("errorCode", static_cast<int>(err));
                 result.set("errorMsg", getErrorMessage(err));
                 return result;
             }
             
-            int rollValue = rdMainDice.intTotal;
-            
-            // 应用奖励/惩罚骰 - 使用 cocCheck 中已有的逻辑
-            if (bonusDice != 0) {
-                int tensDigit = (rollValue / 10) * 10;
-                int onesDigit = rollValue % 10;
-                
-                if (bonusDice > 0) {
-                    for (int j = 0; j < bonusDice; j++) {
-                        RD bonusRd("1D10", 10);
-                        bonusRd.Roll();
-                        int newTens = (bonusRd.intTotal % 10) * 10;
-                        if (newTens < tensDigit) tensDigit = newTens;
-                    }
-                } else {
-                    for (int j = 0; j < -bonusDice; j++) {
-                        RD penaltyRd("1D10", 10);
-                        penaltyRd.Roll();
-                        int newTens = (penaltyRd.intTotal % 10) * 10;
-                        if (newTens > tensDigit) tensDigit = newTens;
-                    }
-                }
-                rollValue = tensDigit + onesDigit;
-            }
+            int rollValue = rdRoll.intTotal;
             
             // 使用 RD.cpp 中的 RollSuccessLevel 函数判定 - 参考 DiceEvent.cpp 3724行
             SuccessLevel successLevel = autoSuccess && rollValue <= finalSkillValue 
