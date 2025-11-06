@@ -7,6 +7,7 @@
 #include "../features/initiative.h"
 #include "../features/deck.h"
 #include "../features/rule.h"
+#include "../dice_character_parse.h"
 #include "../../../Dice/Dice/RD.h"
 
 using namespace emscripten;
@@ -66,6 +67,14 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("processCheck", &CommandProcessor::processCheck);
     function("processCOCCheck", &CommandProcessor::processCOCCheck);
     
+    // === 基础掷骰 ===
+    function("rollDice", &rollDice);
+    function("cocCheck", &cocCheck);
+    function("skillCheck", &skillCheck);
+    function("hiddenRoll", &hiddenRoll);
+    function("getMaxValue", &getMaxValue);
+    function("getMinValue", &getMinValue);
+    
     // === 角色生成 ===
     function("generateCOC7Character", &generateCOC7Character);
     function("generateCOC6Character", &generateCOC6Character);
@@ -104,6 +113,10 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("queryRuleBySystem", &queryRuleBySystem);
     function("listRuleKeys", &listRuleKeys);
     function("listRulesBySystem", &listRulesBySystem);
+    
+    // === 人物卡解析 ===
+    function("parseCOCAttributes", &parseCOCAttributes);
+    function("normalizeAttributeName", &normalizeAttributeName);
     
     // === 工具函数 ===
     function("initialize", &initialize);
