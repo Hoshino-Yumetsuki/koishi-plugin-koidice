@@ -1,6 +1,8 @@
-#include "dice_character.h"
-#include "dice_roll.h"
-#include "../../Dice/Dice/RD.h"
+#include "character.h"
+#include "../core/utils.h"
+#include "../../../Dice/Dice/RD.h"
+
+namespace koidice {
 
 std::string generateCOC7Character() {
     ensureRandomInit();
@@ -78,3 +80,5 @@ std::string generateDNDCharacter(int count) {
         return "生成失败: 未知错误";
     }
 }
+
+} // namespace koidice

@@ -126,16 +126,24 @@ set(DICE_CORE_SOURCES
     ../Dice/Dice/GlobalVar.cpp
 )
 
-# WASM interface source files
+# WASM interface source files - 新的模块化结构
 set(WASM_SOURCES
-    src/dice_wasm_bindings.cpp
-    src/dice_roll.cpp
-    src/dice_character.cpp
-    src/dice_character_parse.cpp
-    src/dice_insanity.cpp
-    src/dice_initiative.cpp
-    src/dice_deck.cpp
-    src/dice_rule.cpp
+    # Core - 核心命令处理
+    src/core/utils.cpp
+    src/core/command_processor.cpp
+    src/core/roll_handler.cpp
+    src/core/check_handler.cpp
+    
+    # Features - 功能模块（新结构）
+    src/features/character.cpp
+    src/features/insanity.cpp
+    src/features/initiative.cpp
+    src/features/deck.cpp
+    src/features/rule.cpp
+    src/dice_character_parse.cpp  # 保留旧文件（如果还需要）
+    
+    # Bindings - WASM绑定层
+    src/bindings/wasm_bindings.cpp
 )
 
 # Create WASM library

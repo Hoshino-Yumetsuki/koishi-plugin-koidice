@@ -4,6 +4,8 @@
 #include <map>
 #include <emscripten/val.h>
 
+namespace koidice {
+
 // 先攻条目
 struct InitiativeEntry {
     std::string name;
@@ -29,3 +31,5 @@ int getInitiativeCount(const std::string& channelId);
 // 持久化
 std::string serializeInitiative(const std::string& channelId);
 bool deserializeInitiative(const std::string& channelId, const std::string& jsonStr);
+
+} // namespace koidice

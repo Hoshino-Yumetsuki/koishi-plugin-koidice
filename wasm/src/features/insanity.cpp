@@ -1,11 +1,12 @@
-#include "dice_insanity.h"
-#include "dice_roll.h"
-#include "../../Dice/Dice/RDConstant.h"
-#include "../../Dice/Dice/RD.h"
-#include <emscripten/val.h>
+#include "insanity.h"
+#include "../core/utils.h"
+#include "../../../Dice/Dice/RDConstant.h"
+#include "../../../Dice/Dice/RD.h"
 #include <algorithm>
 
 using namespace emscripten;
+
+namespace koidice {
 
 std::string getTempInsanity(int index) {
     if (index < 1 || index > 10) {
@@ -112,3 +113,5 @@ val sanityCheck(int currentSan, const std::string& successLoss, const std::strin
 
     return result;
 }
+
+} // namespace koidice

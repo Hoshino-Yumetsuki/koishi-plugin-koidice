@@ -107,10 +107,35 @@ export enum SuccessLevel {
 }
 
 /**
+ * 统一命令处理结果（新架构）
+ */
+export interface CommandResult {
+  success: boolean
+  results?: any[]
+  reason?: string
+  rounds?: number
+  isHidden?: boolean
+  isSimple?: boolean
+  errorMsg?: string
+}
+
+/**
  * Dice WASM 模块接口
  */
 export interface DiceModule {
-  // 核心掷骰功能
+  // === 新架构：统一命令处理器 ===
+  processRoll(
+    rawCommand: string,
+    userId: string,
+    channelId: string,
+    isHidden?: boolean,
+    isSimple?: boolean,
+    defaultDice?: number
+  ): CommandResult
+  processCheck(rawCommand: string, userId: string, rule?: number): any
+  processCOCCheck(skillValue: number, bonusDice?: number): COCCheckResult
+
+  // === 旧接口（保持兼容） ===
   rollDice(expression: string, defaultDice?: number): RollResult
   cocCheck(skillValue: number, bonusDice?: number): COCCheckResult
   skillCheck(expression: string, rule?: number): SkillCheckResult

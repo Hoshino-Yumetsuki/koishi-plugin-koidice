@@ -120,6 +120,57 @@ export class DiceAdapter {
     )
   }
 
+  // ============ 新架构：统一命令处理器 ============
+
+  /**
+   * 处理掷骰命令（新架构，C++完成所有解析）
+   * @param rawCommand 原始命令字符串（不含.r前缀）
+   * @param userId 用户ID
+   * @param channelId 频道ID
+   * @param isHidden 是否暗骰
+   * @param isSimple 是否简化输出
+   * @param defaultDice 默认骰子面数
+   */
+  processRoll(
+    rawCommand: string,
+    userId: string,
+    channelId: string,
+    isHidden = false,
+    isSimple = false,
+    defaultDice = 100
+  ) {
+    const module = this.ensureModule()
+    return module.processRoll(
+      rawCommand,
+      userId,
+      channelId,
+      isHidden,
+      isSimple,
+      defaultDice
+    )
+  }
+
+  /**
+   * 处理检定命令（新架构，C++完成所有解析）
+   * @param rawCommand 原始命令字符串
+   * @param userId 用户ID
+   * @param rule COC房规
+   */
+  processCheck(rawCommand: string, userId: string, rule = 0) {
+    const module = this.ensureModule()
+    return module.processCheck(rawCommand, userId, rule)
+  }
+
+  /**
+   * 处理COC检定（新架构）
+   */
+  processCOCCheck(skillValue: number, bonusDice = 0) {
+    const module = this.ensureModule()
+    return module.processCOCCheck(skillValue, bonusDice)
+  }
+
+  // ============ 旧接口（保持兼容） ============
+
   /**
    * 执行掷骰
    * @param expression 掷骰表达式，如 "1d100", "3d6+5"

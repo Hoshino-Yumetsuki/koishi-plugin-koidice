@@ -1,9 +1,11 @@
-#include "dice_deck.h"
-#include "dice_roll.h"
-#include "../../Dice/Dice/CardDeck.h"
+#include "deck.h"
+#include "../core/utils.h"
+#include "../../../Dice/Dice/CardDeck.h"
 #include <sstream>
 
 using namespace emscripten;
+
+namespace koidice {
 
 val drawFromDeck(const std::string& deckName, int count) {
     ensureRandomInit();
@@ -17,7 +19,6 @@ val drawFromDeck(const std::string& deckName, int count) {
             return result;
         }
 
-        // 检查牌堆是否存在
         if (CardDeck::mPublicDeck.count(deckName) == 0 && 
             CardDeck::mExternPublicDeck.count(deckName) == 0) {
             result.set("success", false);
@@ -29,11 +30,9 @@ val drawFromDeck(const std::string& deckName, int count) {
         std::vector<std::string> cards;
 
         for (int i = 0; i < count; i++) {
-            // 使用 {牌堆名} 格式调用 draw 函数
             std::string expression = "{" + deckName + "}";
             std::string card = CardDeck::draw(expression);
             
-            // 如果返回的还是原表达式，说明抽取失败
             if (card == expression || card.empty()) {
                 result.set("success", false);
                 result.set("message", "从牌堆 " + deckName + " 抽取失败");
@@ -43,7 +42,6 @@ val drawFromDeck(const std::string& deckName, int count) {
             cards.push_back(card);
         }
 
-        // 转换为 JavaScript 数组
         val jsCards = val::array();
         for (size_t i = 0; i < cards.size(); i++) {
             jsCards.set(i, cards[i]);
@@ -71,14 +69,12 @@ std::string listDecks() {
         std::ostringstream oss;
         oss << "=== 可用牌堆 ===" << std::endl;
 
-        // 列出公共牌堆
         bool hasDecks = false;
         for (const auto& [name, deck] : CardDeck::mPublicDeck) {
             oss << "- " << name << " (" << deck.size() << "张)" << std::endl;
             hasDecks = true;
         }
 
-        // 列出扩展牌堆
         for (const auto& [name, deck] : CardDeck::mExternPublicDeck) {
             oss << "- " << name << " [扩展] (" << deck.size() << "张)" << std::endl;
             hasDecks = true;
@@ -96,17 +92,15 @@ std::string listDecks() {
 
 int getDeckSize(const std::string& deckName) {
     try {
-        // 查找公共牌堆
         if (CardDeck::mPublicDeck.count(deckName)) {
             return static_cast<int>(CardDeck::mPublicDeck[deckName].size());
         }
 
-        // 查找扩展牌堆
         if (CardDeck::mExternPublicDeck.count(deckName)) {
             return static_cast<int>(CardDeck::mExternPublicDeck[deckName].size());
         }
 
-        return -1; // 牌堆不存在
+        return -1;
     } catch (...) {
         return -1;
     }
@@ -115,3 +109,5 @@ int getDeckSize(const std::string& deckName) {
 bool deckExists(const std::string& deckName) {
     return CardDeck::findDeck(deckName) >= 0;
 }
+
+} // namespace koidice

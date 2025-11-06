@@ -1,19 +1,16 @@
 import type { Command, Context } from 'koishi'
 import type { Config } from '../config'
-import type { DiceAdapter, RollResult } from '../wasm'
+import type { DiceAdapter } from '../wasm'
 import { logger } from '../index'
-import { CharacterService } from '../services/character-service'
 import { getObservers } from './observer'
 
 /**
  * 掷骰命令 .r / .rh / .rs
- * 参考 DiceEvent.cpp 4391-4500行的实现
  * 支持功能:
  * - 基础掷骰: .r 1d100
  * - 多轮掷骰: .r 3#1d6 (掷3次)
  * - 暗骰: .rh 1d100
  * - 简化输出: .rs 1d10+1d6+3 (只显示结果)
- * - 从人物卡读取: .r 沙漠之鹰 (需要先保存表达式)
  */
 export function registerRollCommand(
   parent: Command,
@@ -21,7 +18,6 @@ export function registerRollCommand(
   config: Config,
   diceAdapter: DiceAdapter
 ) {
-  const characterService = new CharacterService(ctx, diceAdapter)
   // 注册 .r 命令（普通掷骰）
   parent
     .subcommand('.r [...args:text]', '掷骰')
@@ -33,7 +29,6 @@ export function registerRollCommand(
       return await handleRollCommand(
         session,
         ctx,
-        characterService,
         diceAdapter,
         config,
         false,
@@ -50,7 +45,6 @@ export function registerRollCommand(
       return await handleRollCommand(
         session,
         ctx,
-        characterService,
         diceAdapter,
         config,
         true,
@@ -67,7 +61,6 @@ export function registerRollCommand(
       return await handleRollCommand(
         session,
         ctx,
-        characterService,
         diceAdapter,
         config,
         false,
@@ -84,7 +77,6 @@ export function registerRollCommand(
       return await handleRollCommand(
         session,
         ctx,
-        characterService,
         diceAdapter,
         config,
         true,
@@ -95,12 +87,11 @@ export function registerRollCommand(
 }
 
 /**
- * 处理掷骰命令的通用函数
+ * 处理掷骰命令
  */
 async function handleRollCommand(
   session: any,
   ctx: Context,
-  characterService: CharacterService,
   diceAdapter: DiceAdapter,
   config: Config,
   isHidden: boolean,
@@ -108,164 +99,94 @@ async function handleRollCommand(
   args: string[]
 ): Promise<string> {
   try {
-    const fullText = args.join(' ')
-    let expression = ''
-    let reason = ''
+    const rawCommand = args.join(' ')
+    const userId = session.userId
+    const channelId = session.channelId || ''
 
-    // 解析表达式和原因
-    // 参考 DiceEvent.cpp 4407-4425行
-    if (fullText) {
-      // 尝试从人物卡读取表达式
-      const attributes = await characterService.getAttributes(session, null)
+    const result = diceAdapter.processRoll(
+      rawCommand,
+      userId,
+      channelId,
+      isHidden,
+      isSimple,
+      config.defaultDice
+    )
 
-      // 如果整个文本是人物卡中的表达式名
-      if (attributes && fullText in attributes) {
-        const value = attributes[fullText]
-        if (typeof value === 'string') {
-          expression = value
-        }
-      } else {
-        // 否则解析表达式
-        // 提取掷骰表达式（包含数字、d、+、-、*、/、#等）
-        const match = fullText.match(/^([\d#dpbkDPBK+\-*/()\s]+)(.*)$/)
-        if (match) {
-          expression = match[1].trim()
-          reason = match[2].trim()
-
-          // 如果表达式只是纯数字，清空它
-          if (/^\d+$/.test(expression)) {
-            reason = fullText
-            expression = ''
-          }
-        } else {
-          reason = fullText
-        }
-      }
+    if (!result.success) {
+      return result.errorMsg || '掷骰失败'
     }
 
-    // 如果没有表达式，使用默认骰子
-    if (!expression) {
-      expression = `1d${config.defaultDice}`
-    }
+    // 暗骰处理
+    if (isHidden && channelId) {
+      // 构建详细消息
+      const detailParts = [session.username]
+      if (result.reason) detailParts.push(result.reason)
 
-    // 解析多轮掷骰 - 参考 DiceEvent.cpp 4430-4457行
-    let rounds = 1
-    let turnExpression = ''
-    if (expression.includes('#')) {
-      const parts = expression.split('#')
-      turnExpression = parts[0] || '1'
-      expression = parts[1]
-
-      // 计算轮数
-      const turnResult = diceAdapter.roll(turnExpression, config.defaultDice)
-      if (turnResult.errorCode !== 0) {
-        return `掷骰失败: ${turnResult.errorMsg}`
-      }
-
-      rounds = turnResult.total
-      if (rounds > 10) {
-        return '掷骰次数不能超过10次'
-      }
-      if (rounds <= 0) {
-        return '掷骰次数必须大于0'
-      }
-    }
-
-    // 暗骰处理（参考 DiceEvent.cpp 4378-4388行）
-    if (isHidden) {
-      // 检查是否在群聊中
-      if (!session.channelId) {
-        // 私聊时禁用暗骰，转为普通掷骰
-        isHidden = false
-      } else {
-        // 执行掷骰
-        const result: RollResult = diceAdapter.roll(
-          expression,
-          config.defaultDice
-        )
-
-        if (result.errorCode !== 0) {
-          return `掷骰失败: ${result.errorMsg}`
-        }
-
-        // 构建详细结果消息
-        const detailParts = [session.username]
-        if (reason) {
-          detailParts.push(reason)
-        }
-        detailParts.push(isSimple ? result.total.toString() : result.detail)
-        const detailMessage = detailParts.join(' ')
-
-        // 私发给掷骰者本人
-        try {
-          await session.bot.sendPrivateMessage(session.userId, detailMessage)
-        } catch (error) {
-          logger.warn(`私发暗骰结果给 ${session.userId} 失败:`, error)
-        }
-
-        // 私发给所有旁观者
-        try {
-          const observers = await getObservers(
-            ctx,
-            session.channelId,
-            session.platform
+      // 格式化结果
+      if (result.results && result.results.length > 0) {
+        if (isSimple) {
+          const totals = result.results.map((r: any) => r.total)
+          detailParts.push(
+            totals.length === 1
+              ? totals[0].toString()
+              : `{ ${totals.join(', ')} }`
           )
-          for (const observerId of observers) {
-            if (observerId !== session.userId) {
-              try {
-                await session.bot.sendPrivateMessage(observerId, detailMessage)
-              } catch (error) {
-                logger.warn(`私发暗骰结果给旁观者 ${observerId} 失败:`, error)
-              }
+        } else {
+          const details = result.results.map((r: any, i: number) =>
+            result.rounds > 1 ? `#${i + 1} ${r.detail}` : r.detail
+          )
+          detailParts.push(details.join(' '))
+        }
+      }
+
+      const detailMessage = detailParts.join(' ')
+
+      // 私发给掷骰者
+      try {
+        await session.bot.sendPrivateMessage(userId, detailMessage)
+      } catch (error) {
+        logger.warn(`私发暗骰结果失败:`, error)
+      }
+
+      // 私发给旁观者
+      try {
+        const observers = await getObservers(ctx, channelId, session.platform)
+        for (const observerId of observers) {
+          if (observerId !== userId) {
+            try {
+              await session.bot.sendPrivateMessage(observerId, detailMessage)
+            } catch (error) {
+              logger.warn(`私发暗骰结果给旁观者失败:`, error)
             }
           }
-        } catch (error) {
-          logger.error('获取旁观者列表失败:', error)
         }
-
-        // 群聊显示提示消息
-        const publicParts = [session.username, '进行了暗骰']
-        if (reason) publicParts.push(reason)
-        return publicParts.join(' ')
+      } catch (error) {
+        logger.error('获取旁观者列表失败:', error)
       }
+
+      // 群聊显示提示
+      const publicParts = [session.username, '进行了暗骰']
+      if (result.reason) publicParts.push(result.reason)
+      return publicParts.join(' ')
     }
 
-    // 执行掷骰 - 参考 DiceEvent.cpp 4461-4500行
-    const results: string[] = []
-
-    for (let i = 0; i < rounds; i++) {
-      const result: RollResult = diceAdapter.roll(
-        expression,
-        config.defaultDice
-      )
-
-      if (result.errorCode !== 0) {
-        return `掷骰失败: ${result.errorMsg}`
-      }
-
-      if (isSimple) {
-        // 简化输出：只显示结果
-        results.push(result.total.toString())
-      } else {
-        // 详细输出
-        results.push(result.detail)
-      }
-    }
-
-    // 构建输出消息
+    // 普通掷骰：格式化输出
     const parts = [session.username]
-    if (reason) {
-      parts.push(reason)
-    }
+    if (result.reason) parts.push(result.reason)
 
-    if (rounds === 1) {
-      parts.push(results[0])
-    } else {
-      // 多轮掷骰
+    if (result.results && result.results.length > 0) {
       if (isSimple) {
-        parts.push(`{ ${results.join(', ')} }`)
+        const totals = result.results.map((r: any) => r.total)
+        parts.push(
+          totals.length === 1
+            ? totals[0].toString()
+            : `{ ${totals.join(', ')} }`
+        )
       } else {
-        parts.push(results.map((r, i) => `#${i + 1} ${r}`).join(' '))
+        const details = result.results.map((r: any, i: number) =>
+          result.rounds > 1 ? `#${i + 1} ${r.detail}` : r.detail
+        )
+        parts.push(details.join(' '))
       }
     }
 

@@ -1,11 +1,13 @@
-#include "dice_initiative.h"
-#include "dice_roll.h"
-#include "../../Dice/Dice/RD.h"
-#include "../../Dice/Dice/Jsonio.h"
+#include "initiative.h"
+#include "../core/utils.h"
+#include "../../../Dice/Dice/RD.h"
+#include "../../../Dice/Dice/Jsonio.h"
 #include <algorithm>
 #include <sstream>
 
 using namespace emscripten;
+
+namespace koidice {
 
 // 全局先攻列表存储（按频道ID）
 static std::map<std::string, InitiativeList> initiativeLists;
@@ -35,15 +37,12 @@ val addInitiative(const std::string& channelId, const std::string& name, int ini
             list = createInitiativeList(channelId);
         }
 
-        // 创建条目
         InitiativeEntry entry;
         entry.name = name;
         entry.initiative = initiative;
 
-        // 添加到列表
         list->entries.push_back(entry);
 
-        // 按先攻值降序排序
         std::sort(list->entries.begin(), list->entries.end(),
                  [](const InitiativeEntry& a, const InitiativeEntry& b) {
                      return a.initiative > b.initiative;
@@ -68,13 +67,11 @@ val rollInitiative(const std::string& channelId, const std::string& name, int mo
     val result = val::object();
 
     try {
-        // 构建掷骰表达式
         std::string expression = "1d20";
         if (modifier != 0) {
             expression += (modifier > 0 ? "+" : "") + std::to_string(modifier);
         }
 
-        // 掷骰
         RD rd(expression, 20);
         int_errno err = rd.Roll();
 
@@ -86,8 +83,6 @@ val rollInitiative(const std::string& channelId, const std::string& name, int mo
         }
 
         int initValue = rd.intTotal;
-
-        // 添加到先攻列表
         val addResult = addInitiative(channelId, name, initValue);
 
         result.set("success", true);
@@ -121,7 +116,6 @@ bool removeInitiative(const std::string& channelId, const std::string& name) {
         list->entries.end()
     );
 
-    // 调整当前索引
     if (list->currentIndex >= static_cast<int>(list->entries.size())) {
         list->currentIndex = 0;
     }
@@ -150,13 +144,11 @@ val nextInitiativeTurn(const std::string& channelId) {
 
     list->currentIndex++;
 
-    // 如果到达列表末尾，进入下一轮
     if (list->currentIndex >= static_cast<int>(list->entries.size())) {
         list->currentIndex = 0;
         list->currentRound++;
     }
 
-    // 获取当前行动者
     const InitiativeEntry& current = list->entries[list->currentIndex];
 
     result.set("success", true);
@@ -241,3 +233,5 @@ bool deserializeInitiative(const std::string& channelId, const std::string& json
         return false;
     }
 }
+
+} // namespace koidice
