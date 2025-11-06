@@ -249,6 +249,16 @@ export class DiceAdapter {
   }
 
   /**
+   * 洗牌并抽取（支持权重，最大随机性）
+   * @param deckName 牌堆名称
+   * @param count 抽取数量，-1表示全部
+   */
+  shuffleDeck(deckName: string, count: number = -1): DeckDrawResult {
+    const module = this.ensureModule()
+    return module.shuffleDeck(deckName, count)
+  }
+
+  /**
    * 列出所有牌堆
    */
   listDecks(): string {

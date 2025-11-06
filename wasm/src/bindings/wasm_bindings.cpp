@@ -39,6 +39,7 @@ using koidice::drawFromDeck;
 using koidice::listDecks;
 using koidice::getDeckSize;
 using koidice::deckExists;
+using koidice::shuffleDeck;
 using koidice::queryRule;
 using koidice::queryRuleBySystem;
 using koidice::listRuleKeys;
@@ -104,6 +105,7 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     
     // === 牌堆系统 ===
     function("drawFromDeck", &drawFromDeck);
+    function("shuffleDeck", &shuffleDeck);
     function("listDecks", &listDecks);
     function("getDeckSize", &getDeckSize);
     function("deckExists", &deckExists);

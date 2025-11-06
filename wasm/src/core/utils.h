@@ -8,6 +8,9 @@ namespace koidice {
 // 随机数初始化
 void ensureRandomInit();
 
+// 使用 JavaScript 的加密随机数生成器
+int getSecureRandomInt(int min, int max);
+
 // 错误消息转换
 std::string getErrorMessage(int_errno err);
 

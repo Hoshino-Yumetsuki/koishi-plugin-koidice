@@ -188,6 +188,7 @@ export interface DiceModule {
 
   // 牌堆功能
   drawFromDeck(deckName: string, count?: number): DeckDrawResult
+  shuffleDeck(deckName: string, count?: number): DeckDrawResult
   listDecks(): string
   getDeckSize(deckName: string): number
   deckExists(deckName: string): boolean
