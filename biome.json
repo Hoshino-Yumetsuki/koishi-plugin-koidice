@@ -20,7 +20,8 @@
       "!*.lock",
       "!!**/Dice",
       "!!**/node_modules",
-      "!!**/lib"
+      "!!**/lib",
+      "!wasm/include/*"
     ]
   },
   "formatter": {

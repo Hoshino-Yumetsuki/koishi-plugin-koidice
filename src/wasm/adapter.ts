@@ -577,6 +577,70 @@ export class DiceAdapter {
     return module.deserializeInitiative(channelId, jsonStr)
   }
 
+  // ============ 扩展系统 ============
+
+  /**
+   * 加载 Lua 扩展
+   * @param name 扩展名称
+   * @param code Lua 代码
+   * @returns 是否加载成功
+   */
+  loadLuaExtension(name: string, code: string): boolean {
+    const module = this.ensureModule()
+    return module.loadLuaExtension(name, code)
+  }
+
+  /**
+   * 加载 JavaScript 扩展
+   * @param name 扩展名称
+   * @param code JavaScript 代码
+   * @returns 是否加载成功
+   */
+  loadJSExtension(name: string, code: string): boolean {
+    const module = this.ensureModule()
+    return module.loadJSExtension(name, code)
+  }
+
+  /**
+   * 调用扩展
+   * @param name 扩展名称
+   * @param context 上下文对象
+   * @returns 扩展执行结果
+   */
+  callExtension(name: string, context: any): string {
+    const module = this.ensureModule()
+    return module.callExtension(name, context)
+  }
+
+  /**
+   * 卸载扩展
+   * @param name 扩展名称
+   * @returns 是否卸载成功
+   */
+  unloadExtension(name: string): boolean {
+    const module = this.ensureModule()
+    return module.unloadExtension(name)
+  }
+
+  /**
+   * 列出所有已加载的扩展
+   * @returns 扩展名称列表（JSON 格式）
+   */
+  listExtensions(): string {
+    const module = this.ensureModule()
+    return module.listExtensions()
+  }
+
+  /**
+   * 检查扩展是否存在
+   * @param name 扩展名称
+   * @returns 扩展是否存在
+   */
+  hasExtension(name: string): boolean {
+    const module = this.ensureModule()
+    return module.hasExtension(name)
+  }
+
   /**
    * 格式化成功等级为文本
    */

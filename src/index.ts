@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { extendDatabase } from './database'
+import { ExtensionService } from './services/extension-service'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -38,15 +39,27 @@ export async function apply(ctx: Context, config: Config) {
   }
 
   // 初始化WASM模块
+  let diceAdapter
   try {
-    await initializeDiceAdapter()
+    diceAdapter = await initializeDiceAdapter()
   } catch (error) {
     logger.error('Dice WASM模块加载失败:', error)
     throw error
   }
 
+  // 初始化扩展系统（始终启用）
+  let extensionService: ExtensionService | null = null
+  try {
+    logger.info('正在初始化扩展系统...')
+    extensionService = new ExtensionService(ctx, diceAdapter)
+    await extensionService.initialize()
+  } catch (error) {
+    logger.error('扩展系统初始化失败:', error)
+    // 不抛出错误，允许插件继续运行
+  }
+
   // 注册所有命令
-  registerCommands(ctx, config)
+  registerCommands(ctx, config, extensionService)
 
   // 清理资源
   ctx.on('dispose', () => {

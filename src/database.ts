@@ -95,6 +95,47 @@ export interface CharacterStats {
 }
 
 /**
+ * 群组数据存储模型（用于扩展系统）
+ */
+export interface GroupData {
+  id: number // 自增主键
+  guildId: string // 群组 ID
+  dataKey: string // 数据键
+  dataValue: string // 数据值（JSON 字符串）
+  updatedAt: Date // 更新时间
+}
+
+/**
+ * 用户数据存储模型（用于扩展系统）
+ */
+export interface UserData {
+  id: number // 自增主键
+  userId: string // 用户 ID
+  dataKey: string // 数据键
+  dataValue: string // 数据值（JSON 字符串）
+  updatedAt: Date // 更新时间
+}
+
+/**
+ * 游戏会话模型
+ */
+export interface GameSession {
+  id: number // 自增主键
+  name: string // 游戏名称
+  guildId: string // 主群组 ID
+  platform: string // 平台
+  gmList: string // GM列表（JSON数组）
+  playerList: string // 玩家列表（JSON数组）
+  observerList: string // 旁观者列表（JSON数组）
+  areas: string // 游戏区域列表（JSON数组）
+  config: string // 游戏配置（JSON对象）
+  roulette: string // 轮盘骰数据（JSON对象）
+  isLogging: boolean // 是否记录日志
+  createdAt: Date // 创建时间
+  updatedAt: Date // 更新时间
+}
+
+/**
  * 扩展数据库表
  */
 declare module 'koishi' {
@@ -106,6 +147,9 @@ declare module 'koishi' {
     koidice_nickname: Nickname
     koidice_character_binding: CharacterBinding
     koidice_character_stats: CharacterStats
+    koidice_group_data: GroupData
+    koidice_user_data: UserData
+    koidice_game_session: GameSession
   }
 }
 
@@ -246,6 +290,65 @@ export function extendDatabase(ctx: Context) {
       autoInc: true,
       primary: 'id',
       unique: [['userId', 'platform', 'cardName']]
+    }
+  )
+
+  // 群组数据存储表
+  ctx.model.extend(
+    'koidice_group_data',
+    {
+      id: 'unsigned',
+      guildId: 'string',
+      dataKey: 'string',
+      dataValue: 'text',
+      updatedAt: 'timestamp'
+    },
+    {
+      autoInc: true,
+      primary: 'id',
+      unique: [['guildId', 'dataKey']]
+    }
+  )
+
+  // 用户数据存储表
+  ctx.model.extend(
+    'koidice_user_data',
+    {
+      id: 'unsigned',
+      userId: 'string',
+      dataKey: 'string',
+      dataValue: 'text',
+      updatedAt: 'timestamp'
+    },
+    {
+      autoInc: true,
+      primary: 'id',
+      unique: [['userId', 'dataKey']]
+    }
+  )
+
+  // 游戏会话表
+  ctx.model.extend(
+    'koidice_game_session',
+    {
+      id: 'unsigned',
+      name: 'string',
+      guildId: 'string',
+      platform: 'string',
+      gmList: 'text',
+      playerList: 'text',
+      observerList: 'text',
+      areas: 'text',
+      config: 'text',
+      roulette: 'text',
+      isLogging: 'boolean',
+      createdAt: 'timestamp',
+      updatedAt: 'timestamp'
+    },
+    {
+      autoInc: true,
+      primary: 'id',
+      unique: [['name', 'platform']]
     }
   )
 }

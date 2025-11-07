@@ -1,3 +1,12 @@
 [submodule "Dice"]
 	path = Dice
 	url = https://github.com/Dice-Developer-Team/Dice.git
+[submodule "wasm/include/lua"]
+	path = wasm/include/lua
+	url = https://github.com/lua/lua.git
+[submodule "wasm/include/QuickJS"]
+	path = wasm/include/QuickJS
+	url = https://github.com/quickjs-zh/QuickJS
+[submodule "wasm/include/yaml-cpp"]
+	path = wasm/include/yaml-cpp
+	url = https://github.com/jbeder/yaml-cpp.git

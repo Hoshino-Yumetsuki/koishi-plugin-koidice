@@ -15,8 +15,11 @@ import {
   registerObserverCommands,
   registerWODCommands,
   registerRuleCommands,
-  registerNicknameCommands
+  registerNicknameCommands,
+  registerAnkoCommands,
+  registerGameCommands
 } from './commands/index'
+import { registerExtensionCommands } from './commands/extension'
 
 let diceAdapter: DiceAdapter | null = null
 
@@ -34,7 +37,11 @@ export async function initializeDiceAdapter() {
 /**
  * 注册所有命令
  */
-export async function registerCommands(ctx: Context, config: Config) {
+export async function registerCommands(
+  ctx: Context,
+  config: Config,
+  extensionService?: any
+) {
   if (!diceAdapter) {
     throw new Error('Dice adapter not initialized')
   }
@@ -50,6 +57,8 @@ export async function registerCommands(ctx: Context, config: Config) {
   registerAttributeCharacterCommands(koidice, ctx, diceAdapter)
   registerRollCommand(koidice, ctx, config, diceAdapter)
   registerNicknameCommands(koidice, ctx, config, diceAdapter)
+  registerAnkoCommands(koidice, config)
+  registerGameCommands(koidice, ctx, config)
 
   if (config.enableCOC) {
     registerCheckCommand(koidice, ctx, config, diceAdapter)
@@ -65,5 +74,10 @@ export async function registerCommands(ctx: Context, config: Config) {
   registerSettingsCommands(koidice, ctx, config, diceAdapter)
   registerObserverCommands(koidice, ctx, config, diceAdapter)
   registerWODCommands(koidice, ctx, config, diceAdapter)
-  registerRuleCommands(koidice, config, diceAdapter, ctx)
+  registerRuleCommands(koidice, config, diceAdapter, ctx, extensionService)
+
+  // 注册扩展管理命令
+  if (extensionService) {
+    registerExtensionCommands(koidice, ctx, config, extensionService)
+  }
 }

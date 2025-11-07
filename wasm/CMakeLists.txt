@@ -77,6 +77,42 @@ if(EMSCRIPTEN)
     string(REPLACE ";" " " EMSCRIPTEN_LINK_FLAGS_STR "${EMSCRIPTEN_LINK_FLAGS}")
 endif()
 
+# ============================================
+# Lua 5.4 Integration
+# ============================================
+file(GLOB LUA_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/include/lua/*.c")
+# Exclude standalone interpreters and test files
+list(FILTER LUA_SOURCES EXCLUDE REGEX ".*/lua\\.c$")
+list(FILTER LUA_SOURCES EXCLUDE REGEX ".*/luac\\.c$")
+list(FILTER LUA_SOURCES EXCLUDE REGEX ".*/onelua\\.c$")  # Single-file amalgamation (causes duplicates)
+list(FILTER LUA_SOURCES EXCLUDE REGEX ".*/ltests\\.c$")  # Test file
+
+# ============================================
+# QuickJS Integration
+# ============================================
+# Note: quickjs-libc.c is excluded because it contains POSIX-specific code
+# that is not compatible with WASM (environ, sighandler_t, etc.)
+set(QUICKJS_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/quickjs.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/libbf.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/libregexp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/libunicode.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/cutils.c
+)
+
+# ============================================
+# yaml-cpp Integration
+# ============================================
+# Disable yaml-cpp tests, tools, and shared libs for WASM
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_CONTRIB ON CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+
+# Add yaml-cpp as subdirectory
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/yaml-cpp EXCLUDE_FROM_ALL)
+
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../Dice/Dice
@@ -88,6 +124,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/libzip/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/include/curl/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/lua
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/zlib
 )
 
@@ -142,21 +179,33 @@ set(WASM_SOURCES
     src/features/rule.cpp
     src/dice_character_parse.cpp  # 保留旧文件（如果还需要）
 
+    # Extensions - 扩展系统
+    src/extensions/extension_manager.cpp
+    src/extensions/lua_support.cpp
+    src/extensions/js_support.cpp
+
     # Bindings - WASM绑定层
     src/bindings/wasm_bindings.cpp
 )
 
 # Create WASM library
-add_executable(dice ${DICE_CORE_SOURCES} ${WASM_SOURCES})
+add_executable(dice ${DICE_CORE_SOURCES} ${WASM_SOURCES} ${LUA_SOURCES} ${QUICKJS_SOURCES})
 
 # Set compile definitions
 target_compile_definitions(dice PRIVATE
     DICE_WASM_BUILD
     CONFIG_BIGNUM
     _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+    # Lua definitions
+    LUA_USE_POSIX
+    LUA_32BITS
+    # QuickJS definitions
+    CONFIG_VERSION="2021-03-27"
+    JS_STRICT_NAN_BOXING
 )
 
-# Do not link external libraries - use stub files
+# Link yaml-cpp library
+target_link_libraries(dice PRIVATE yaml-cpp)
 
 # Apply Emscripten flags
 if(EMSCRIPTEN)

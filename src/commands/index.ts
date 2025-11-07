@@ -11,5 +11,7 @@ export * from './observer'
 export * from './wod'
 export * from './rule'
 export * from './nickname'
+export * from './anko'
+export * from './game'
 
 export { registerCOCCommands } from './coc/index'

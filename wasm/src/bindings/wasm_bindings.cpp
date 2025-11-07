@@ -8,6 +8,7 @@
 #include "../features/deck.h"
 #include "../features/rule.h"
 #include "../dice_character_parse.h"
+#include "../extensions/extension_manager.h"
 #include "../../../Dice/Dice/RD.h"
 
 using namespace emscripten;
@@ -118,6 +119,124 @@ EMSCRIPTEN_BINDINGS(dice_module) {
 
     // === 工具函数 ===
     function("initialize", &initialize);
+
+    // === 扩展系统 ===
+    // 加载扩展
+    function("loadLuaExtension", optional_override([](const std::string& name, const std::string& code) {
+        return extensions::ExtensionManager::getInstance().loadLuaExtension(name, code);
+    }));
+
+    function("loadJSExtension", optional_override([](const std::string& name, const std::string& code) {
+        return extensions::ExtensionManager::getInstance().loadJSExtension(name, code);
+    }));
+
+    // 辅助函数：递归转换 JS 值到 AttrVar
+    auto convertJSValueToAttrVar = [](const val& value, auto& self) -> AttrVar {
+        if (value.isUndefined() || value.isNull()) {
+            return AttrVar();
+        } else if (value.isString()) {
+            return AttrVar(value.as<std::string>());
+        } else if (value.isNumber()) {
+            double num = value.as<double>();
+            if (num == (int)num) {
+                return AttrVar((int)num);
+            } else {
+                return AttrVar(num);
+            }
+        } else if (value.isTrue() || value.isFalse()) {
+            return AttrVar(value.as<bool>());
+        } else if (value.instanceof(val::global("Array"))) {
+            // 处理数组 - 转换为 AnysTable（索引从 1 开始，兼容 Lua）
+            int length = value["length"].as<int>();
+            AttrObject arr = std::make_shared<AnysTable>();
+            for (int i = 0; i < length; i++) {
+                arr->set(std::to_string(i + 1), self(value[i], self));
+            }
+            return AttrVar(arr);
+        } else {
+            // 递归处理嵌套对象
+            std::string typeStr = value["constructor"]["name"].as<std::string>();
+            if (typeStr == "Object" || typeStr == "Array") {
+                AttrObject obj = std::make_shared<AnysTable>();
+                val keys = val::global("Object").call<val>("keys", value);
+                int length = keys["length"].as<int>();
+                for (int i = 0; i < length; i++) {
+                    std::string key = keys[i].as<std::string>();
+                    obj->set(key, self(value[key], self));
+                }
+                return AttrVar(obj);
+            }
+        }
+        return AttrVar();
+    };
+
+    // 调用扩展 - 接收 JavaScript 对象作为 context
+    function("callExtension", +[](const std::string& name, const val& jsContext) -> std::string {
+        // 递归转换函数（内联）
+        std::function<AttrVar(const val&)> convertValue = [&convertValue](const val& value) -> AttrVar {
+            if (value.isUndefined() || value.isNull()) {
+                return AttrVar();
+            } else if (value.isString()) {
+                return AttrVar(value.as<std::string>());
+            } else if (value.isNumber()) {
+                double num = value.as<double>();
+                if (num == (int)num) {
+                    return AttrVar((int)num);
+                } else {
+                    return AttrVar(num);
+                }
+            } else if (value.isTrue() || value.isFalse()) {
+                return AttrVar(value.as<bool>());
+            } else if (value.instanceof(val::global("Array"))) {
+                int length = value["length"].as<int>();
+                AttrObject arr = std::make_shared<AnysTable>();
+                for (int i = 0; i < length; i++) {
+                    arr->set(std::to_string(i + 1), convertValue(value[i]));
+                }
+                return AttrVar(arr);
+            } else {
+                AttrObject obj = std::make_shared<AnysTable>();
+                val keys = val::global("Object").call<val>("keys", value);
+                int length = keys["length"].as<int>();
+                for (int i = 0; i < length; i++) {
+                    std::string key = keys[i].as<std::string>();
+                    obj->set(key, convertValue(value[key]));
+                }
+                return AttrVar(obj);
+            }
+        };
+        // 将 JavaScript 对象转换为 AttrObject
+        AttrObject context = std::make_shared<AnysTable>();
+
+        // 遍历 JS 对象的属性
+        val keys = val::global("Object").call<val>("keys", jsContext);
+        int length = keys["length"].as<int>();
+
+        for (int i = 0; i < length; i++) {
+            std::string key = keys[i].as<std::string>();
+            val value = jsContext[key];
+
+            // 使用递归转换函数
+            context->set(key, convertValue(value));
+        }
+
+        return extensions::ExtensionManager::getInstance().callExtension(name, context);
+    });
+
+    // 卸载扩展
+    function("unloadExtension", optional_override([](const std::string& name) {
+        return extensions::ExtensionManager::getInstance().unloadExtension(name);
+    }));
+
+    // 列出所有扩展
+    function("listExtensions", optional_override([]() {
+        return extensions::ExtensionManager::getInstance().listExtensions();
+    }));
+
+    // 检查扩展是否存在
+    function("hasExtension", optional_override([](const std::string& name) {
+        return extensions::ExtensionManager::getInstance().hasExtension(name);
+    }));
 
     // === 注册容器 ===
     register_vector<std::string>("VectorString");

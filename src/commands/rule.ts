@@ -436,8 +436,9 @@ function findRemoteRule(system: string, keyword: string): RuleEntry | null {
 export function registerRuleCommands(
   parent: Command,
   _config: Config,
-  diceAdapter: DiceAdapter,
-  _ctx: Context
+  _diceAdapter: DiceAdapter,
+  _ctx: Context,
+  extensionService?: any
 ) {
   // 主命令：规则查询
   parent
@@ -469,11 +470,24 @@ export function registerRuleCommands(
           keyword = parts[1].trim()
         }
 
+        // 1. 查询插件规则
+        if (extensionService) {
+          const pluginRules = extensionService.listPluginRules()
+          for (const ruleName of pluginRules) {
+            const content = extensionService.queryPluginRule(ruleName, keyword)
+            if (content) {
+              return `【${keyword}】(来自 ${ruleName})\n${content}`
+            }
+          }
+        }
+
+        // 2. 查询本地规则
         const localRule = findLocalRule(system, keyword)
         if (localRule) {
           return `【${localRule.name}】\n${localRule.content}`
         }
 
+        // 3. 查询远程缓存规则
         const cachedRule = findRemoteRule(system, keyword)
         if (cachedRule) {
           return `【${cachedRule.name}】\n${cachedRule.content}`
@@ -506,23 +520,33 @@ export function registerRuleCommands(
   // 子命令：列出规则
   parent.subcommand('.rule.list', '列出所有规则').action(async () => {
     try {
-      let result = `=== Dice! 内置规则 ===\n`
+      let result = `=== 本地规则 ===\n`
+      let totalRules = 0
 
-      try {
-        const allKeys = diceAdapter.listRuleKeys()
-        result += `共 ${allKeys.length} 条规则\n`
-        result += `使用 .rule <关键词> 查询\n`
-      } catch (error) {
-        logger.error('列出规则错误:', error)
-      }
-
-      // 显示本地规则信息
-      if (Object.keys(localRulesCache).length > 0) {
-        result += `\n=== 本地规则文件 ===\n`
-        for (const [system, rules] of Object.entries(localRulesCache)) {
-          result += `${system}: ${Object.keys(rules).length} 条\n`
+      // 显示插件规则
+      if (extensionService) {
+        const pluginRules = extensionService.listPluginRules()
+        if (pluginRules.length > 0) {
+          for (const ruleName of pluginRules) {
+            result += `${ruleName}: 可用\n`
+            totalRules++
+          }
         }
       }
+
+      // 显示本地规则文件
+      if (Object.keys(localRulesCache).length > 0) {
+        for (const [system, rules] of Object.entries(localRulesCache)) {
+          const count = Object.keys(rules).length
+          result += `${system}: ${count} 条\n`
+          totalRules += count
+        }
+      }
+
+      if (totalRules === 0) {
+        result += `暂无本地规则\n`
+      }
+      result += `\n使用 .rule <关键词> 查询`
 
       // 显示远程规则信息
       const remoteData = getRulesData()
