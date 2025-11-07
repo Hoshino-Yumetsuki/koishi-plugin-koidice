@@ -54,7 +54,12 @@ export async function registerCommands(
 
   // 注册所有子命令
   registerDeckCommands(koidice, config, diceAdapter)
-  registerAttributeCharacterCommands(koidice, ctx, diceAdapter)
+  registerAttributeCharacterCommands(
+    koidice,
+    ctx,
+    diceAdapter,
+    extensionService
+  )
   registerRollCommand(koidice, ctx, config, diceAdapter)
   registerNicknameCommands(koidice, ctx, config, diceAdapter)
   registerAnkoCommands(koidice, config)

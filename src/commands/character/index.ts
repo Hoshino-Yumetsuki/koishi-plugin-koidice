@@ -4,6 +4,7 @@
  */
 import type { Command, Context } from 'koishi'
 import type { DiceAdapter } from '../../wasm'
+import type { ExtensionService } from '../../services/extension-service'
 import { registerStSetCommand } from './st-set'
 import { registerStShowCommand } from './st-show'
 import { registerStSwitchCommand } from './st-switch'
@@ -14,7 +15,8 @@ import { registerPcCommands } from '../pc'
 export function registerCharacterCommands(
   parent: Command,
   ctx: Context,
-  diceAdapter: DiceAdapter
+  diceAdapter: DiceAdapter,
+  extensionService?: ExtensionService
 ) {
   registerStShowCommand(parent, ctx, diceAdapter)
   registerStSwitchCommand(parent, ctx, diceAdapter)
@@ -24,7 +26,7 @@ export function registerCharacterCommands(
   registerStSetCommand(parent, ctx, diceAdapter)
 
   // 注册.pc多人物卡命令
-  registerPcCommands(parent, ctx, diceAdapter)
+  registerPcCommands(parent, ctx, diceAdapter, extensionService)
 }
 
 export * from './types'

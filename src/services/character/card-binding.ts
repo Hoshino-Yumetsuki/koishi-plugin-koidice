@@ -85,6 +85,69 @@ export async function bindCard(
       cardName: targetCard.cardName
     })
   }
+
+  // 缓存角色卡数据到群组数据，供 Lua 实时查询
+  try {
+    const attrs =
+      typeof targetCard.attributes === 'string'
+        ? JSON.parse(targetCard.attributes)
+        : targetCard.attributes
+    const cardData = {
+      __Name: targetCard.cardName,
+      name: targetCard.cardName,
+      type: targetCard.cardType,
+      ...attrs
+    }
+    const cacheKey = `player_card#${userId}`
+    // 转换为 Lua table 字面量格式
+    const cacheValue = toLuaTable(cardData)
+
+    // 检查是否已存在
+    const existing = await ctx.database.get('koidice_group_data', {
+      guildId,
+      dataKey: cacheKey
+    })
+
+    if (existing.length > 0) {
+      // 更新现有记录
+      await ctx.database.set(
+        'koidice_group_data',
+        { guildId, dataKey: cacheKey },
+        {
+          dataValue: cacheValue
+        }
+      )
+    } else {
+      // 创建新记录
+      await ctx.database.create('koidice_group_data', {
+        guildId,
+        dataKey: cacheKey,
+        dataValue: cacheValue
+      })
+    }
+  } catch (error) {
+    // 缓存失败不影响绑定
+    console.error('缓存角色卡失败:', error)
+  }
+}
+
+/**
+ * 将 JavaScript 对象转换为 Lua table 字面量
+ */
+function toLuaTable(obj: any): string {
+  if (typeof obj !== 'object' || obj === null) {
+    if (typeof obj === 'string') {
+      return `"${obj.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+    }
+    return String(obj)
+  }
+
+  const pairs: string[] = []
+  for (const [key, value] of Object.entries(obj)) {
+    const luaKey = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key) ? key : `["${key}"]`
+    pairs.push(`${luaKey}=${toLuaTable(value)}`)
+  }
+  return `{${pairs.join(',')}}`
 }
 
 /**

@@ -36,8 +36,8 @@ ExtensionManager& ExtensionManager::getInstance() {
     return instance;
 }
 
-bool ExtensionManager::loadLuaExtension(const std::string& name, const std::string& code) {
-    if (!pImpl->luaExt->loadScript(name, code)) {
+bool ExtensionManager::loadLuaExtension(const std::string& name, const std::string& code, const std::string& originalCode) {
+    if (!pImpl->luaExt->loadScript(name, code, originalCode)) {
         return false;
     }
 

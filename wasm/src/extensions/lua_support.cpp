@@ -139,22 +139,45 @@ static int lua_dice_setGroupData(lua_State* L) {
 }
 
 // loadLua(scriptName) - 加载另一个 Lua 脚本
+// 模拟原版 Dice 行为：重新执行原始脚本代码并返回结果
 static int lua_loadLua(lua_State* L) {
     LUA_CHECK_ARGS(L, 1);
     const char* scriptName = luaL_checkstring(L, 1);
 
-    // 从全局注册表中查找已加载的脚本
-    lua_getglobal(L, "__KOIDICE_SCRIPTS__");
+    // 从原始代码注册表中查找脚本代码
+    lua_getglobal(L, "__KOIDICE_ORIGINAL_CODES__");
     if (!lua_istable(L, -1)) {
-        return luaL_error(L, "Script registry not found");
+        return luaL_error(L, "Original code registry not found");
     }
 
     lua_getfield(L, -1, scriptName);
     if (lua_isnil(L, -1)) {
+        lua_pop(L, 2); // 弹出 nil 和表
         return luaL_error(L, "Script '%s' not found", scriptName);
     }
 
-    return 1; // 返回脚本函数
+    // 获取原始代码字符串
+    const char* originalCode = lua_tostring(L, -1);
+    if (!originalCode) {
+        lua_pop(L, 2);
+        return luaL_error(L, "Failed to get original code for '%s'", scriptName);
+    }
+
+    // 移除表和代码字符串，清理栈
+    lua_pop(L, 2);
+
+    // 编译并执行原始代码（不是包装后的代码）
+    if (luaL_loadstring(L, originalCode) != LUA_OK) {
+        return lua_error(L); // 传播编译错误
+    }
+
+    // 执行脚本，无参数，1个返回值
+    if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
+        return lua_error(L); // 传播运行时错误
+    }
+
+    // 返回脚本执行的结果（可能是函数、字符串等）
+    return 1;
 }
 
 // ============ Lua 扩展类实现 ============
@@ -179,9 +202,13 @@ void LuaExtension::initLuaState() {
     // 注册 dice API
     registerDiceAPI();
 
-    // 创建脚本注册表
+    // 创建脚本注册表（保存包装后的函数）
     lua_newtable(L);
     lua_setglobal(L, "__KOIDICE_SCRIPTS__");
+
+    // 创建原始代码注册表（保存原始脚本代码）
+    lua_newtable(L);
+    lua_setglobal(L, "__KOIDICE_ORIGINAL_CODES__");
 }
 
 void LuaExtension::registerDiceAPI() {
@@ -221,13 +248,13 @@ void LuaExtension::registerDiceAPI() {
     lua_setglobal(L, "loadLua");
 }
 
-bool LuaExtension::loadScript(const std::string& name, const std::string& code) {
+bool LuaExtension::loadScript(const std::string& name, const std::string& code, const std::string& originalCode) {
     if (scripts.find(name) != scripts.end()) {
         lastError = "Script '" + name + "' already loaded";
         return false;
     }
 
-    // 编译脚本
+    // 编译脚本（包装后的代码）
     int loadResult = luaL_loadstring(L, code.c_str());
     if (loadResult != LUA_OK) {
         lastError = lua_tostring(L, -1);
@@ -253,11 +280,19 @@ bool LuaExtension::loadScript(const std::string& name, const std::string& code) 
     // 保存到注册表
     int ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-    // 同时保存到脚本注册表（供 loadLua 使用）
+    // 同时保存到脚本注册表（供 execute 使用）
     lua_getglobal(L, "__KOIDICE_SCRIPTS__");
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
     lua_setfield(L, -2, name.c_str());
     lua_pop(L, 1);
+
+    // 保存原始代码到原始代码注册表（供 loadLua 使用）
+    if (!originalCode.empty()) {
+        lua_getglobal(L, "__KOIDICE_ORIGINAL_CODES__");
+        lua_pushstring(L, originalCode.c_str());
+        lua_setfield(L, -2, name.c_str());
+        lua_pop(L, 1);
+    }
 
     Script script;
     script.name = name;

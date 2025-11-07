@@ -4,6 +4,7 @@
  */
 import type { Command, Context } from 'koishi'
 import type { DiceAdapter } from '../../wasm'
+import type { ExtensionService } from '../../services/extension-service'
 import { registerPcNewCommand } from './pc-new'
 import { registerPcTagCommand } from './pc-tag'
 import { registerPcShowCommand } from './pc-show'
@@ -23,10 +24,11 @@ import { registerPcStatCommand } from './pc-stat'
 export function registerPcCommands(
   parent: Command,
   ctx: Context,
-  diceAdapter: DiceAdapter
+  diceAdapter: DiceAdapter,
+  extensionService?: ExtensionService
 ) {
   // 注册子命令到parent
-  registerPcNewCommand(parent, ctx, diceAdapter)
+  registerPcNewCommand(parent, ctx, diceAdapter, extensionService)
   registerPcTagCommand(parent, ctx, diceAdapter)
   registerPcShowCommand(parent, ctx, diceAdapter)
   registerPcNnCommand(parent, ctx, diceAdapter)

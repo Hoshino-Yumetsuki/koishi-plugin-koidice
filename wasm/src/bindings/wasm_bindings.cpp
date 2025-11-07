@@ -122,8 +122,8 @@ EMSCRIPTEN_BINDINGS(dice_module) {
 
     // === 扩展系统 ===
     // 加载扩展
-    function("loadLuaExtension", optional_override([](const std::string& name, const std::string& code) {
-        return extensions::ExtensionManager::getInstance().loadLuaExtension(name, code);
+    function("loadLuaExtension", optional_override([](const std::string& name, const std::string& code, const std::string& originalCode) {
+        return extensions::ExtensionManager::getInstance().loadLuaExtension(name, code, originalCode);
     }));
 
     function("loadJSExtension", optional_override([](const std::string& name, const std::string& code) {
@@ -146,12 +146,13 @@ EMSCRIPTEN_BINDINGS(dice_module) {
         } else if (value.isTrue() || value.isFalse()) {
             return AttrVar(value.as<bool>());
         } else if (value.instanceof(val::global("Array"))) {
-            // 处理数组 - 转换为 AnysTable（索引从 1 开始，兼容 Lua）
+            // 处理数组 - 创建 VarArray 来正确初始化 AnysTable 的 list 成员
             int length = value["length"].as<int>();
-            AttrObject arr = std::make_shared<AnysTable>();
+            VarArray varArray;
             for (int i = 0; i < length; i++) {
-                arr->set(std::to_string(i + 1), self(value[i], self));
+                varArray.push_back(self(value[i], self));
             }
+            AttrObject arr = std::make_shared<AnysTable>(varArray);
             return AttrVar(arr);
         } else {
             // 递归处理嵌套对象
@@ -189,10 +190,13 @@ EMSCRIPTEN_BINDINGS(dice_module) {
                 return AttrVar(value.as<bool>());
             } else if (value.instanceof(val::global("Array"))) {
                 int length = value["length"].as<int>();
-                AttrObject arr = std::make_shared<AnysTable>();
+                // 创建一个 VarArray 来存储数组元素
+                VarArray varArray;
                 for (int i = 0; i < length; i++) {
-                    arr->set(std::to_string(i + 1), convertValue(value[i]));
+                    varArray.push_back(convertValue(value[i]));
                 }
+                // 使用 VarArray 构造 AnysTable
+                AttrObject arr = std::make_shared<AnysTable>(varArray);
                 return AttrVar(arr);
             } else {
                 AttrObject obj = std::make_shared<AnysTable>();

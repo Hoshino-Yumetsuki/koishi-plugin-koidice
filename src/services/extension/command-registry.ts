@@ -16,7 +16,8 @@ export async function registerPluginCommands(
   commands: Map<string, ReplyConfig>,
   characterService: CharacterService,
   gameSessionService: GameSessionService,
-  pluginRules: Map<string, any>
+  pluginRules: Map<string, any>,
+  templateAliasMap?: Map<string, Record<string, string>>
 ): Promise<void> {
   if (commands.size === 0) {
     logger.info(`No commands to register`)
@@ -43,25 +44,36 @@ export async function registerPluginCommands(
 
       // 去掉前缀的 "." 得到命令名
       const koishiCmd = prefix.startsWith('.') ? prefix.substring(1) : prefix
-      logger.info(`  - ${koishiCmd} -> ${scriptName}`)
+
+      // 将插件命令注册为子命令: koidice.<插件名>.<命令名>
+      const pluginName = descriptor.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-')
+      const fullCmd = `koidice.${pluginName}.${koishiCmd}`
+
+      logger.info(`  - ${fullCmd} -> ${scriptName}`)
 
       // 注册 Koishi 命令
-      ctx
-        .command(`${koishiCmd} [...args]`)
+      // 创建基础命令,然后为常见的子命令(show, list等)注册子命令
+      const baseCmd = ctx
+        .command(`${fullCmd} [action:text] [...args]`)
         .usage(
           config.rule
             ? `[${config.rule}] ${descriptor.title || descriptor.name}`
             : descriptor.title || descriptor.name
         )
-        .action(async ({ session }, ...args) => {
+        .action(async ({ session }, action, ...args) => {
+          // 将 action 和 args 组合为完整参数
+          const allArgs = action ? [action, ...args] : args
           // 准备扩展上下文
           const context = await buildExtensionContext(
             ctx,
             session,
-            args,
+            allArgs,
             characterService,
             gameSessionService,
-            pluginRules
+            pluginRules,
+            templateAliasMap
           )
 
           try {
@@ -71,6 +83,24 @@ export async function registerPluginCommands(
             )
             let result = adapter.callExtension(scriptName, context)
 
+            // 脚本执行后，重新读取名片缓存（因为脚本可能更新了名片）
+            let updatedCard = context.card
+            try {
+              const guildId = session?.guildId || session?.channelId || ''
+              if (guildId) {
+                const cardKey = `card#${session.userId}`
+                const cardData = await ctx.database.get('koidice_group_data', {
+                  guildId,
+                  dataKey: cardKey
+                })
+                if (cardData.length > 0) {
+                  updatedCard = cardData[0].dataValue || ''
+                }
+              }
+            } catch (error) {
+              logger.debug('重新读取名片缓存失败:', error)
+            }
+
             // 替换占位符
             if (result && typeof result === 'string') {
               result = replacePlaceholders(result, {
@@ -78,8 +108,10 @@ export async function registerPluginCommands(
                 userId: session.userId,
                 guildId: session.guildId,
                 channelId: session.channelId,
-                charName: context.char?.__Name || context.char?.name
+                charName: context.char?.__Name || context.char?.name,
+                card: updatedCard
               })
+              logger.debug(`Extension result (${scriptName}): ${result}`)
             }
 
             return result
@@ -88,6 +120,73 @@ export async function registerPluginCommands(
             return `[错误] ${error.message}`
           }
         })
+
+      // 为常见的子命令注册别名
+      // 例如: team show, team list 等
+      const commonSubCommands = ['show', 'list', 'add', 'remove', 'del', 'set']
+      for (const subCmd of commonSubCommands) {
+        baseCmd
+          .subcommand(`.${subCmd} [...args]`)
+          .action(async ({ session }, ...args) => {
+            // 将子命令名作为第一个参数
+            const allArgs = [subCmd, ...args]
+            const context = await buildExtensionContext(
+              ctx,
+              session,
+              allArgs,
+              characterService,
+              gameSessionService,
+              pluginRules,
+              templateAliasMap
+            )
+
+            try {
+              logger.debug(
+                `Calling ${scriptName} with suffix: "${context.suffix}"`
+              )
+              let result = adapter.callExtension(scriptName, context)
+
+              // 脚本执行后，重新读取名片缓存
+              let updatedCard = context.card
+              try {
+                const guildId = session?.guildId || session?.channelId || ''
+                if (guildId) {
+                  const cardKey = `card#${session.userId}`
+                  const cardData = await ctx.database.get(
+                    'koidice_group_data',
+                    {
+                      guildId,
+                      dataKey: cardKey
+                    }
+                  )
+                  if (cardData.length > 0) {
+                    updatedCard = cardData[0].dataValue || ''
+                  }
+                }
+              } catch (error) {
+                logger.debug('重新读取名片缓存失败:', error)
+              }
+
+              // 替换占位符
+              if (result && typeof result === 'string') {
+                result = replacePlaceholders(result, {
+                  username: session.username,
+                  userId: session.userId,
+                  guildId: session.guildId,
+                  channelId: session.channelId,
+                  charName: context.char?.__Name || context.char?.name,
+                  card: updatedCard
+                })
+                logger.debug(`Extension result (${scriptName}): ${result}`)
+              }
+
+              return result
+            } catch (error) {
+              logger.error(`Extension error (${scriptName}):`, error)
+              return `[错误] ${error.message}`
+            }
+          })
+      }
 
       // 添加权限检查
       if (config.type === 'Game' && config.limit?.grp_id?.nor === 0) {
@@ -109,12 +208,31 @@ async function buildExtensionContext(
   args: string[],
   characterService: CharacterService,
   gameSessionService: GameSessionService,
-  pluginRules: Map<string, any>
+  pluginRules: Map<string, any>,
+  templateAliasMap?: Map<string, Record<string, string>>
 ): Promise<any> {
   // 加载角色卡数据
+  // 优先使用群组绑定的角色卡,如果没有则使用全局激活的角色卡
   let charData
   try {
-    const activeCard = await characterService.getActiveCard(session)
+    let activeCard
+
+    // 如果在群聊中,优先使用群组绑定的角色卡
+    if (session?.guildId) {
+      activeCard = await characterService.getBoundCard(session)
+      if (activeCard) {
+        logger.debug(`Using bound card: ${activeCard.cardName}`)
+      }
+    }
+
+    // 如果没有群组绑定,使用全局激活的角色卡
+    if (!activeCard) {
+      activeCard = await characterService.getActiveCard(session)
+      if (activeCard) {
+        logger.debug(`Using active card: ${activeCard.cardName}`)
+      }
+    }
+
     if (activeCard) {
       const attrs =
         typeof activeCard.attributes === 'string'
@@ -137,9 +255,68 @@ async function buildExtensionContext(
     const gameSession = await gameSessionService.getSession(session)
     if (gameSession) {
       gameData = gameSessionService.gameToContext(gameSession)
+      logger.debug(`gameData.pls after gameToContext:`, gameData.pls)
+
+      // 预先缓存所有游戏玩家的角色卡数据
+      const playerList = JSON.parse(gameSession.playerList || '[]')
+      logger.debug(
+        `Caching cards for ${playerList.length} players:`,
+        playerList
+      )
+      for (const playerId of playerList) {
+        try {
+          const playerCard = await characterService.getActiveCard({
+            userId: playerId,
+            platform: session.platform
+          } as any)
+          logger.debug(`Player ${playerId} card:`, playerCard)
+          if (playerCard) {
+            const attrs =
+              typeof playerCard.attributes === 'string'
+                ? JSON.parse(playerCard.attributes)
+                : playerCard.attributes
+            const cardData = {
+              __Name: playerCard.cardName,
+              name: playerCard.cardName,
+              type: playerCard.cardType,
+              ...attrs
+            }
+            // 序列化并缓存
+            const cacheKey = `player_card#${playerId}`
+            const guildId = session?.guildId || session?.channelId || ''
+            await ctx.database.upsert('koidice_group_data', [
+              {
+                guildId,
+                dataKey: cacheKey,
+                dataValue: JSON.stringify(cardData)
+              }
+            ])
+          }
+        } catch (_error) {
+          // 忽略缓存失败
+        }
+      }
+    }
+  } catch (_error) {
+    // 忽略获取游戏会话失败
+  }
+
+  // 读取缓存的名片
+  let cardText = ''
+  try {
+    const guildId = session?.guildId || session?.channelId || ''
+    if (guildId) {
+      const cardKey = `card#${session.userId}`
+      const cardData = await ctx.database.get('koidice_group_data', {
+        guildId,
+        dataKey: cardKey
+      })
+      if (cardData.length > 0) {
+        cardText = cardData[0].dataValue || ''
+      }
     }
   } catch (error) {
-    logger.debug('获取游戏会话失败:', error)
+    logger.debug('获取名片缓存失败:', error)
   }
 
   // 准备扩展上下文
@@ -149,9 +326,13 @@ async function buildExtensionContext(
     gid: session?.guildId || session?.channelId || '',
     private: !session?.guildId,
     char: charData,
+    card: cardText, // 缓存的名片文本
     game: gameData || {},
     pluginRules: Object.fromEntries(pluginRules),
-    // 获取其他玩家角色卡的函数
+    templateAliasMap: templateAliasMap
+      ? Object.fromEntries(templateAliasMap)
+      : {},
+    // 获取其他玩家角色卡的函数（异步，但不在 Lua 中使用）
     getPlayerCard: async (uid: string, gid?: string) => {
       try {
         const cards = await ctx.database.get('koidice_character_binding', {

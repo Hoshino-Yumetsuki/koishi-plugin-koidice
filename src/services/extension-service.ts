@@ -14,6 +14,11 @@ import type {
 import { wrapLuaScript } from './extension/script-wrapper'
 import { loadRulebooks } from './extension/rulebook-loader'
 import { registerPluginCommands } from './extension/command-registry'
+import {
+  parseTemplate,
+  createAliasMap,
+  type CharacterTemplate
+} from './extension/template-parser'
 
 /**
  * 扩展加载和管理服务
@@ -21,6 +26,8 @@ import { registerPluginCommands } from './extension/command-registry'
 export class ExtensionService {
   private loadedPlugins: Map<string, LoadedPlugin> = new Map()
   private pluginRules: Map<string, any> = new Map()
+  private pluginTemplates: Map<string, CharacterTemplate> = new Map()
+  private templateAliasMap: Map<string, Record<string, string>> = new Map()
   private pluginDir: string
   private characterService: CharacterService
   private gameSessionService: GameSessionService
@@ -136,7 +143,11 @@ export class ExtensionService {
         if (isLua) {
           // 使用包装函数处理 Lua 脚本
           const processedCode = wrapLuaScript(code, descriptor)
-          success = this.adapter.loadLuaExtension(wasmScriptName, processedCode)
+          success = this.adapter.loadLuaExtension(
+            wasmScriptName,
+            processedCode,
+            code
+          )
 
           // 同时用简短名称注册（去掉插件名前缀）
           // 例如: Maid-TRPG.Maid.overview -> Maid.overview
@@ -144,7 +155,7 @@ export class ExtensionService {
             const shortName = wasmScriptName.substring(
               descriptor.name.length + 1
             )
-            this.adapter.loadLuaExtension(shortName, processedCode)
+            this.adapter.loadLuaExtension(shortName, processedCode, code)
           }
         } else if (isJs) {
           success = this.adapter.loadJSExtension(wasmScriptName, code)
@@ -171,7 +182,31 @@ export class ExtensionService {
       }
     }
 
-    // 4. 读取 rulebook/ 目录，加载规则文件
+    // 4. 读取 model/ 目录，加载角色卡模板
+    const modelDir = path.join(pluginPath, 'model')
+    try {
+      const modelFiles = await fs.readdir(modelDir)
+      for (const file of modelFiles) {
+        if (file.endsWith('.xml')) {
+          const modelPath = path.join(modelDir, file)
+          const xmlContent = await fs.readFile(modelPath, 'utf-8')
+          const template = parseTemplate(xmlContent)
+          if (template) {
+            this.pluginTemplates.set(template.name, template)
+            // 创建别名映射
+            const aliasMap = createAliasMap(template)
+            this.templateAliasMap.set(template.name, aliasMap)
+            logger.info(
+              `Loaded template: ${template.name} from ${descriptor.name}`
+            )
+          }
+        }
+      }
+    } catch (error) {
+      logger.debug(`No model templates found:`, error)
+    }
+
+    // 5. 读取 rulebook/ 目录，加载规则文件
     const rulebookDir = path.join(pluginPath, 'rulebook')
     try {
       await loadRulebooks(rulebookDir, descriptor.name, this.pluginRules)
@@ -179,7 +214,7 @@ export class ExtensionService {
       logger.debug(`No rulebooks found:`, error)
     }
 
-    // 5. 读取 reply/ 目录，解析命令配置
+    // 6. 读取 reply/ 目录，解析命令配置
     const commands = new Map<string, ReplyConfig>()
     const replyDir = path.join(pluginPath, 'reply')
     try {
@@ -198,7 +233,8 @@ export class ExtensionService {
         commands,
         this.characterService,
         this.gameSessionService,
-        this.pluginRules
+        this.pluginRules,
+        this.templateAliasMap
       )
     }
 
@@ -312,6 +348,27 @@ export class ExtensionService {
    */
   listPluginRules(): string[] {
     return Array.from(this.pluginRules.keys())
+  }
+
+  /**
+   * 获取角色卡模板
+   */
+  getTemplate(templateName: string): CharacterTemplate | undefined {
+    return this.pluginTemplates.get(templateName)
+  }
+
+  /**
+   * 列出所有可用的角色卡模板
+   */
+  listTemplates(): string[] {
+    return Array.from(this.pluginTemplates.keys())
+  }
+
+  /**
+   * 获取模板的别名映射
+   */
+  getAliasMap(templateName: string): Record<string, string> | undefined {
+    return this.templateAliasMap.get(templateName)
   }
 
   /**

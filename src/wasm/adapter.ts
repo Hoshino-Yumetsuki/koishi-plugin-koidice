@@ -582,12 +582,13 @@ export class DiceAdapter {
   /**
    * 加载 Lua 扩展
    * @param name 扩展名称
-   * @param code Lua 代码
+   * @param code Lua 代码（包装后的）
+   * @param originalCode 原始 Lua 代码（用于 loadLua）
    * @returns 是否加载成功
    */
-  loadLuaExtension(name: string, code: string): boolean {
+  loadLuaExtension(name: string, code: string, originalCode: string): boolean {
     const module = this.ensureModule()
-    return module.loadLuaExtension(name, code)
+    return module.loadLuaExtension(name, code, originalCode)
   }
 
   /**

@@ -20,7 +20,7 @@ public:
     ~LuaExtension();
 
     // 加载脚本
-    bool loadScript(const std::string& name, const std::string& code);
+    bool loadScript(const std::string& name, const std::string& code, const std::string& originalCode = "");
 
     // 执行脚本并返回结果
     std::string execute(const std::string& name, const AttrObject& context);

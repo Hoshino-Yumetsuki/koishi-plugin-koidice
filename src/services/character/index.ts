@@ -10,9 +10,7 @@ export * from './card-stats'
 // 重新导出主服务类
 import type { Context, Session } from 'koishi'
 import type { DiceAdapter } from '../../wasm/adapter'
-import type {
-  CharacterStats
-} from '../../database'
+import type { CharacterStats } from '../../database'
 import * as CardOps from './card-operations'
 import * as CardBinding from './card-binding'
 import * as CardStats from './card-stats'

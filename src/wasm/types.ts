@@ -214,7 +214,7 @@ export interface DiceModule {
 
   // ============ 扩展系统 ============
   /** 加载 Lua 扩展 */
-  loadLuaExtension(name: string, code: string): boolean
+  loadLuaExtension(name: string, code: string, originalCode: string): boolean
   /** 加载 JavaScript 扩展 */
   loadJSExtension(name: string, code: string): boolean
   /** 调用扩展 */

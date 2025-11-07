@@ -45,9 +45,10 @@ public:
 
     // 加载 Lua 扩展
     // name: 扩展名称（如 "Maid.sn"）
-    // code: Lua 脚本代码
+    // code: Lua 脚本代码（包装后的）
+    // originalCode: 原始 Lua 脚本代码（用于 loadLua）
     // returns: 是否成功
-    bool loadLuaExtension(const std::string& name, const std::string& code);
+    bool loadLuaExtension(const std::string& name, const std::string& code, const std::string& originalCode = "");
 
     // 加载 JavaScript 扩展
     // name: 扩展名称（如 "Maid.team"）
