@@ -33,7 +33,7 @@ std::string normalizeAttributeName(const std::string& name);
  * 支持格式：
  * - 力量 60 敏捷 70
  * - Alice--力量 60 敏捷 70
- * 
+ *
  * @param input 输入字符串
  * @return JS对象 { cardName?: string, operations: Array<{attr, op, value}> }
  */
@@ -45,7 +45,7 @@ emscripten::val parseStCommand(const std::string& input);
  * - 力量 敏捷
  * - Alice--力量 敏捷
  * - all
- * 
+ *
  * @param input 输入字符串
  * @return JS对象 { cardName?: string, attributes: Array<string> }
  */

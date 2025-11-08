@@ -57,12 +57,12 @@ static const std::unordered_map<std::string, std::string> ATTRIBUTE_ALIASES = {
 
 std::string normalizeAttributeName(const std::string& name) {
     std::string lower = name;
-    std::transform(lower.begin(), lower.end(), lower.begin(), 
+    std::transform(lower.begin(), lower.end(), lower.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-    
+
     // 去除空格
     lower.erase(std::remove_if(lower.begin(), lower.end(), ::isspace), lower.end());
-    
+
     auto it = ATTRIBUTE_ALIASES.find(lower);
     if (it != ATTRIBUTE_ALIASES.end()) {
         return it->second;
@@ -74,16 +74,16 @@ emscripten::val parseStCommand(const std::string& input) {
     std::string text = trim(input);
     std::string cardName;
     std::vector<AttributeOperation> operations;
-    
+
     // 解析人物卡名称（格式：名称--属性 值）
     std::regex cardRegex(R"(^(.+?)--(.+)$)");
     std::smatch match;
-    
+
     if (std::regex_match(text, match, cardRegex)) {
         cardName = trim(match[1].str());
         text = trim(match[2].str());
     }
-    
+
     // 按空格分割
     std::vector<std::string> parts;
     std::istringstream iss(text);
@@ -93,17 +93,17 @@ emscripten::val parseStCommand(const std::string& input) {
             parts.push_back(part);
         }
     }
-    
+
     // 简单的"属性名 值"配对解析
     for (size_t i = 0; i + 1 < parts.size(); i += 2) {
         const std::string& attrName = parts[i];
         const std::string& valueStr = parts[i + 1];
-        
+
         // 验证属性名：只接受纯中文、英文或数字字母组合
         // 使用简单的ASCII检查和UTF-8中文检查
         bool isValidAttrName = true;
         bool hasAlpha = false;
-        
+
         for (unsigned char c : attrName) {
             if (c >= 0x80) {
                 // 可能是UTF-8多字节字符（中文）
@@ -116,11 +116,11 @@ emscripten::val parseStCommand(const std::string& input) {
                 break;
             }
         }
-        
+
         if (!isValidAttrName || attrName.empty()) {
             continue;
         }
-        
+
         // 解析数值
         try {
             int value = std::stoi(valueStr);
@@ -134,14 +134,14 @@ emscripten::val parseStCommand(const std::string& input) {
             continue;
         }
     }
-    
+
     // 转换为 JS 对象
     emscripten::val result = emscripten::val::object();
-    
+
     if (!cardName.empty()) {
         result.set("cardName", cardName);
     }
-    
+
     emscripten::val jsOperations = emscripten::val::array();
     for (size_t i = 0; i < operations.size(); ++i) {
         emscripten::val op = emscripten::val::object();
@@ -151,7 +151,7 @@ emscripten::val parseStCommand(const std::string& input) {
         jsOperations.set(i, op);
     }
     result.set("operations", jsOperations);
-    
+
     return result;
 }
 
@@ -159,16 +159,16 @@ emscripten::val parseAttributeList(const std::string& input) {
     std::string text = trim(input);
     std::string cardName;
     std::vector<std::string> attributes;
-    
+
     // 解析人物卡名称（格式：名称--属性1 属性2）
     std::regex cardRegex(R"(^(.+?)--(.+)$)");
     std::smatch match;
-    
+
     if (std::regex_match(text, match, cardRegex)) {
         cardName = trim(match[1].str());
         text = trim(match[2].str());
     }
-    
+
     // 分割属性名
     std::istringstream iss(text);
     std::string attr;
@@ -177,20 +177,20 @@ emscripten::val parseAttributeList(const std::string& input) {
             attributes.push_back(normalizeAttributeName(attr));
         }
     }
-    
+
     // 转换为 JS 对象
     emscripten::val result = emscripten::val::object();
-    
+
     if (!cardName.empty()) {
         result.set("cardName", cardName);
     }
-    
+
     emscripten::val jsAttributes = emscripten::val::array();
     for (size_t i = 0; i < attributes.size(); ++i) {
         jsAttributes.set(i, attributes[i]);
     }
     result.set("attributes", jsAttributes);
-    
+
     return result;
 }
 

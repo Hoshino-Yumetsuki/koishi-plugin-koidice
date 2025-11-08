@@ -2,7 +2,7 @@ import type { ParsedStCommand } from './types'
 import type { DiceAdapter } from '../../wasm'
 
 /**
- * 解析 .st 命令参数（使用 C++ WASM 实现）
+ * 解析 .st 命令参数
  * 只支持格式：
  * - 力量 60 敏捷 70
  * - Alice--力量 60 敏捷 70
@@ -15,7 +15,7 @@ export function parseStCommand(
 }
 
 /**
- * 解析属性名列表（用于 show 和 del 命令）（使用 C++ WASM 实现）
+ * 解析属性名列表（用于 show 和 del 命令）
  * 支持格式：
  * - 力量 敏捷
  * - Alice--力量 敏捷
