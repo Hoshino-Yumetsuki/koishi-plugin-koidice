@@ -11,9 +11,3 @@
  */
 std::string parseCOCAttributes(const std::string& input);
 
-/**
- * 规范化属性名
- * @param name 属性名
- * @return 规范化后的属性名
- */
-std::string normalizeAttributeName(const std::string& name);

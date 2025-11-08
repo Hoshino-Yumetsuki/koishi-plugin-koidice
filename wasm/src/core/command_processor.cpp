@@ -2,6 +2,7 @@
 #include "roll_handler.h"
 #include "check_handler.h"
 #include "utils.h"
+#include "utf8_utils.h"
 #include <regex>
 #include <sstream>
 
@@ -131,15 +132,18 @@ void CommandProcessor::parseCheckExpression(
     expr = trim(expr);
 
     // 解析难度关键词
-    if (startsWith(expr, "自动成功")) {
+    if (utf8StartsWith(expr, "自动成功")) {
         autoSuccess = true;
-        expr = expr.substr(12); // "自动成功" = 12 bytes in UTF-8
-    } else if (startsWith(expr, "困难")) {
+        expr = utf8RemovePrefix(expr, "自动成功");
+    } else if (utf8StartsWith(expr, "困难")) {
         difficulty = Difficulty::Hard;
-        expr = expr.substr(6); // "困难" = 6 bytes
-    } else if (startsWith(expr, "极难") || startsWith(expr, "极限")) {
+        expr = utf8RemovePrefix(expr, "困难");
+    } else if (utf8StartsWith(expr, "极难")) {
         difficulty = Difficulty::Extreme;
-        expr = expr.substr(6); // "极难"/"极限" = 6 bytes
+        expr = utf8RemovePrefix(expr, "极难");
+    } else if (utf8StartsWith(expr, "极限")) {
+        difficulty = Difficulty::Extreme;
+        expr = utf8RemovePrefix(expr, "极限");
     }
 
     expr = trim(expr);

@@ -113,6 +113,16 @@ set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
 # Add yaml-cpp as subdirectory
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/yaml-cpp EXCLUDE_FROM_ALL)
 
+# ============================================
+# simdutf Integration
+# ============================================
+# Disable simdutf tests and benchmarks for WASM
+set(SIMDUTF_TESTS OFF CACHE BOOL "" FORCE)
+set(SIMDUTF_BENCHMARKS OFF CACHE BOOL "" FORCE)
+
+# Add simdutf as subdirectory
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/simdutf EXCLUDE_FROM_ALL)
+
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../Dice/Dice
@@ -167,6 +177,7 @@ set(DICE_CORE_SOURCES
 set(WASM_SOURCES
     # Core - 核心命令处理
     src/core/utils.cpp
+    src/core/utf8_utils.cpp
     src/core/command_processor.cpp
     src/core/roll_handler.cpp
     src/core/check_handler.cpp
@@ -207,6 +218,9 @@ target_compile_definitions(dice PRIVATE
 
 # Link yaml-cpp library
 target_link_libraries(dice PRIVATE yaml-cpp)
+
+# Link simdutf library
+target_link_libraries(dice PRIVATE simdutf)
 
 # Apply Emscripten flags
 if(EMSCRIPTEN)

@@ -116,9 +116,9 @@ EMSCRIPTEN_BINDINGS(dice_module) {
 
     // === 人物卡解析 ===
     function("parseCOCAttributes", &parseCOCAttributes);
-    function("normalizeAttributeName", &normalizeAttributeName);
-    function("parseStCommand", &parseStCommand);
-    function("parseAttributeList", &parseAttributeList);
+    function("normalizeAttributeName", &koidice::normalizeAttributeName);
+    function("parseStCommand", &koidice::parseStCommand);
+    function("parseAttributeList", &koidice::parseAttributeList);
 
     // === 工具函数 ===
     function("initialize", &initialize);

@@ -1,9 +1,11 @@
 #include "character_parser.h"
 #include "../core/utils.h"
+#include "../core/utf8_utils.h"
 #include <regex>
 #include <unordered_map>
 #include <algorithm>
 #include <cctype>
+#include <sstream>
 #include <emscripten/val.h>
 
 namespace koidice {
@@ -99,25 +101,8 @@ emscripten::val parseStCommand(const std::string& input) {
         const std::string& attrName = parts[i];
         const std::string& valueStr = parts[i + 1];
 
-        // 验证属性名：只接受纯中文、英文或数字字母组合
-        // 使用简单的ASCII检查和UTF-8中文检查
-        bool isValidAttrName = true;
-        bool hasAlpha = false;
-
-        for (unsigned char c : attrName) {
-            if (c >= 0x80) {
-                // 可能是UTF-8多字节字符（中文）
-                continue;
-            } else if (std::isalpha(c)) {
-                hasAlpha = true;
-            } else if (!std::isspace(c)) {
-                // 既不是字母也不是UTF-8字符
-                isValidAttrName = false;
-                break;
-            }
-        }
-
-        if (!isValidAttrName || attrName.empty()) {
+        // 验证属性名
+        if (!isValidAttributeName(attrName)) {
             continue;
         }
 

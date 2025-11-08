@@ -1,5 +1,6 @@
 #include "deck.h"
 #include "../core/utils.h"
+#include "../core/utf8_utils.h"
 #include "../../../Dice/Dice/CardDeck.h"
 #include "../../../Dice/Dice/RandomGenerator.h"
 #include <sstream>
