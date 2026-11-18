@@ -1,5 +1,7 @@
 # Dice! 用户手册
 
+> 这是上游 Dice! 的参考手册，不是 Koidice 的命令清单。群管理与 OneBot 接入由宿主负责；跑团框架的用法见 [Koidice README](./README.md)。
+
 本手册对应Dice!2.7.0beta5版本，为用户指令提供说明。管理权限使用的指令请参考[Master手册](https://shiki.stringempty.xyz/Manual/Shiki_Master_Manual.html)。[点此下载本手册](https://shiki.stringempty.xyz/download/Shiki_User_Manual.pdf)![](_static/demo_bot.jpg)
 
 [TOC]
