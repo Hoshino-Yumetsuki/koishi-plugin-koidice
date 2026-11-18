@@ -76,7 +76,7 @@ yarn install
 # 编译 WASM 模块（需要先安装 Emscripten）
 yarn build:wasm
 
-# 编译 TypeScript
+# 用 tsdown 生成 ESM、CommonJS 和类型声明，保留 lib/ 下的 WASM 产物
 yarn build:ts
 
 # 完整构建

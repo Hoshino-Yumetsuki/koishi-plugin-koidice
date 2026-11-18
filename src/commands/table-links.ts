@@ -1,4 +1,5 @@
-import { h, type Context, type Session } from 'koishi';
+import type { Context, Session } from 'koishi';
+import { h } from '../koishi-runtime';
 import type { RegisterCommand } from '../command-scope';
 
 interface TableLink {

@@ -1,4 +1,5 @@
-import { Argv, type Command, type Context, type Session } from 'koishi';
+import type { Argv, Command, Context, Session } from 'koishi';
+import { Argv as runtimeArgv } from './koishi-runtime';
 import { communityCommandsEnabled } from './commands/community';
 import { tableChannelCommandsEnabled } from './commands/table-links';
 
@@ -58,7 +59,7 @@ export function createCommandRegistrar(ctx: Context, diceStyle: boolean) {
       rest = rest.slice(child[0].length);
     }
     if (marked || wushu) session.stripped.prefix ??= marked ? original[0] : '';
-    return Argv.parse(prefix + path + rest);
+    return runtimeArgv.parse(prefix + path + rest);
   };
   ctx.on('before-parse', parseDice as (content: string, session: Session) => Argv, true);
 

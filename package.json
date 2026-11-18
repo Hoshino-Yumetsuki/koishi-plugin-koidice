@@ -8,9 +8,14 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
-      "require": "./lib/index.cjs",
-      "import": "./lib/index.mjs"
+      "import": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.mjs"
+      },
+      "require": {
+        "types": "./lib/index.d.cts",
+        "default": "./lib/index.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -20,7 +25,7 @@
   "scripts": {
     "build:wasm": "powershell -Command \"New-Item -ItemType Directory -Force -Path wasm/build | Out-Null; Set-Location wasm/build; emcmake cmake .. -DCMAKE_BUILD_TYPE=Release; cmake --build . --parallel\"",
     "build:wasm:debug": "powershell -Command \"New-Item -ItemType Directory -Force -Path wasm/build | Out-Null; Set-Location wasm/build; emcmake cmake .. -DCMAKE_BUILD_TYPE=Debug; cmake --build .\"",
-    "build:ts": "yarn rolldown -c rolldown.config.js",
+    "build:ts": "tsdown",
     "build": "yarn build:wasm && yarn build:ts",
     "test:koishi": "node --test test/*.cjs",
     "publish": "yarn npm publish",
@@ -53,8 +58,7 @@
     "oxfmt": "^0.63.0",
     "oxlint": "^1.78.0",
     "oxlint-tsgolint": "^7.0.2001",
-    "rolldown": "^1.2.4",
-    "rolldown-plugin-dts": "^0.28.2",
+    "tsdown": "^0.23.7",
     "typescript": "~5.9.3"
   },
   "koishi": {

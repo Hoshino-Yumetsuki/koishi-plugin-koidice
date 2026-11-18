@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
-import { h, type Context, type Session } from 'koishi';
+import type { Context, Session } from 'koishi';
+import { h } from '../koishi-runtime';
 import { RE2JS } from 're2js';
 import type { RegisterCommand } from '../command-scope';
 import { communityRepliesEnabled } from './community';

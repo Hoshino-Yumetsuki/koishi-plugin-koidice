@@ -1,4 +1,5 @@
-import { type Context, Logger } from 'koishi';
+import type { Context, Logger as KoishiLogger } from 'koishi';
+import { Logger } from './koishi-runtime';
 import type { Config } from './config';
 import { initializeDiceAdapter, registerCommands } from './commands';
 import { readFileSync } from 'node:fs';
@@ -14,7 +15,7 @@ export const version = packageJson.version;
 import { getDataPath } from './utils/path';
 import { createLogger, setLoggerLevel } from './utils/logger';
 
-export let logger: Logger = new Logger('koidice');
+export let logger: KoishiLogger = new Logger('koidice');
 
 export const inject = {
   required: ['database']

@@ -1,4 +1,5 @@
-import { Schema } from 'koishi';
+import type { Schema as KoishiSchema } from 'koishi';
+import { Schema } from './koishi-runtime';
 
 export interface Config {
   // 基础设置
@@ -22,7 +23,7 @@ export interface Config {
   isLog: boolean;
 }
 
-export const Config: Schema<Config> = Schema.intersect([
+export const Config: KoishiSchema<Config> = Schema.intersect([
   // 基础设置
   Schema.object({
     defaultDice: Schema.number().default(100).description('默认骰子面数').min(2).max(1000),
