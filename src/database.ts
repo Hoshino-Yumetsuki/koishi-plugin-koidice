@@ -145,6 +145,7 @@ declare module 'koishi' {
     koidice_initiative: InitiativeList;
     koidice_observer: Observer;
     koidice_nickname: Nickname;
+    koidice_nickname_v2: Nickname & { platform: string };
     koidice_character_binding: CharacterBinding;
     koidice_character_stats: CharacterStats;
     koidice_group_data: GroupData;
@@ -249,6 +250,10 @@ export function extendDatabase(ctx: Context) {
       unique: [['userId', 'guildId']]
     }
   );
+  ctx.model.extend('koidice_nickname_v2', {
+    id: 'unsigned', userId: 'string', platform: 'string', guildId: 'string',
+    nickname: 'string', createdAt: 'timestamp', updatedAt: 'timestamp'
+  }, { autoInc: true, primary: 'id', unique: [['platform', 'userId', 'guildId']] });
 
   // 人物卡群组绑定表
   ctx.model.extend(

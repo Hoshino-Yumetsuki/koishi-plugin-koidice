@@ -1,4 +1,4 @@
-import type { Context } from 'koishi';
+import type { Context, Session } from 'koishi';
 import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
@@ -13,17 +13,16 @@ import { logger } from '../index';
  * 获取用户昵称
  * 优先级：群内称呼 > 全局称呼 > 群名片 > 用户名
  */
-async function getUserNickname(session: any, ctx: Context): Promise<string> {
-  const userId = session.userId || session.uid;
-  const guildId = session.guildId || session.gid;
+export async function getUserNickname(session: Session, ctx: Context): Promise<string> {
+  const userId = session.userId;
+  const platform = session.platform;
+  const guildId = session.isDirect ? '' : session.channelId || session.guildId || '';
+  if (!userId || !platform) throw new Error('无法获取用户信息');
 
   try {
     // 优先获取群内昵称
     if (guildId && ctx.database) {
-      const guildNick = await ctx.database.get('koidice_nickname', {
-        userId,
-        guildId
-      });
+      const guildNick = await ctx.database.get('koidice_nickname_v2', { userId, platform, guildId });
       if (guildNick && guildNick.length > 0) {
         return guildNick[0].nickname;
       }
@@ -31,9 +30,7 @@ async function getUserNickname(session: any, ctx: Context): Promise<string> {
 
     // 获取全局昵称
     if (ctx.database) {
-      const globalNick = (await ctx.database.get('koidice_nickname', { userId })).find(
-        (entry) => entry.guildId === null
-      );
+      const globalNick = (await ctx.database.get('koidice_nickname_v2', { userId, platform, guildId: '' }))[0];
       if (globalNick) {
         return globalNick.nickname;
       }
@@ -50,43 +47,40 @@ async function getUserNickname(session: any, ctx: Context): Promise<string> {
 /**
  * 设置用户昵称
  */
-async function setUserNickname(session: any, ctx: Context, nickname: string): Promise<void> {
-  const userId = session.userId || session.uid;
-  const guildId = session.guildId || session.gid;
-
-  // 私聊时设置全局昵称，群聊时设置群内昵称
-  const targetGuildId = guildId || null;
-
-  await ctx.database?.upsert('koidice_nickname', [
-    {
-      userId,
-      guildId: targetGuildId,
-      nickname
-    }
-  ]);
+async function setUserNickname(session: Session, ctx: Context, nickname: string): Promise<void> {
+  const userId = session.userId;
+  const platform = session.platform;
+  if (!userId || !platform) throw new Error('无法获取用户信息');
+  const guildId = session.isDirect ? '' : session.channelId || session.guildId || '';
+  const existing = await ctx.database.get('koidice_nickname_v2', { userId, platform, guildId });
+  const now = new Date();
+  if (existing.length) {
+    await ctx.database.set('koidice_nickname_v2', { userId, platform, guildId }, { nickname, updatedAt: now });
+  } else {
+    await ctx.database.create('koidice_nickname_v2', { userId, platform, guildId, nickname, createdAt: now, updatedAt: now });
+  }
 }
 
 /**
  * 删除用户昵称
  */
 async function deleteUserNickname(
-  session: any,
+  session: Session,
   ctx: Context,
   clearAll: boolean = false
 ): Promise<boolean> {
-  const userId = session.userId || session.uid;
-  const guildId = session.guildId || session.gid;
+  const userId = session.userId;
+  const platform = session.platform;
+  const guildId = session.isDirect ? '' : session.channelId || session.guildId || '';
+  if (!userId || !platform) throw new Error('无法获取用户信息');
 
   if (clearAll) {
     // 删除所有昵称
-    const result = await ctx.database?.remove('koidice_nickname', { userId });
+    const result = await ctx.database.remove('koidice_nickname_v2', { userId, platform });
     return (result?.removed ?? 0) > 0;
   } else {
     // 只删除当前群的昵称
-    const result = await ctx.database?.remove('koidice_nickname', {
-      userId,
-      guildId: guildId || null
-    });
+    const result = await ctx.database.remove('koidice_nickname_v2', { userId, platform, guildId });
     return (result?.removed ?? 0) > 0;
   }
 }
@@ -101,7 +95,7 @@ export function registerNicknameCommands(
   diceAdapter: DiceAdapter
 ) {
   // .nn 称呼管理主命令
-  const nn = register('nn <nickname:text>', '设置称呼')
+  const nn = register('nn [nickname:text]', '设置称呼')
     .usage('用法: .nn <昵称>')
     .example('.nn kp - 设置昵称为kp')
     .action(async ({ session }, nickname) => {
@@ -109,11 +103,12 @@ export function registerNicknameCommands(
         const oldNick = await getUserNickname(session, ctx);
 
         if (!nickname) {
-          return '请指定昵称';
+          return `当前称呼：${oldNick}`;
         }
 
         // 过滤掉前导符号
         nickname = nickname.replace(/^[.!！。/\\]+/, '').trim();
+        if (!nickname) return '请指定昵称';
 
         if (nickname.length > 50) {
           return '昵称长度不能超过50个字符';
@@ -147,6 +142,11 @@ export function registerNicknameCommands(
         return '删除昵称时发生错误';
       }
     });
+
+  nn.subcommand('.clr', '删除所有称呼').action(async ({ session }) => {
+    if (!session) return '无法获取会话信息';
+    return (await deleteUserNickname(session, ctx, true)) ? '已删除所有称呼' : '没有设置称呼';
+  });
 
   // .nnn 随机昵称主命令
   const nnn = register('nnn', '随机昵称')
@@ -185,7 +185,7 @@ export function registerNicknameCommands(
     .example('.name - 生成1个随机姓名')
     .example('.name 10 - 生成10个随机姓名')
     .action(async ({ session }, count = 1) => {
-      return await generateRandomNames(session, diceAdapter, '', count);
+      return await generateRandomNames(session, ctx, diceAdapter, '', count);
     });
 
   // .name.cn [数量] - 中文姓名
@@ -193,7 +193,7 @@ export function registerNicknameCommands(
     .subcommand('.cn [count:number]', '中文姓名')
     .usage('生成中文姓名')
     .action(async ({ session }, count = 1) => {
-      return await generateRandomNames(session, diceAdapter, 'cn', count);
+      return await generateRandomNames(session, ctx, diceAdapter, 'cn', count);
     });
 
   // .name.jp [数量] - 日文姓名
@@ -201,7 +201,7 @@ export function registerNicknameCommands(
     .subcommand('.jp [count:number]', '日文姓名')
     .usage('生成日文姓名')
     .action(async ({ session }, count = 1) => {
-      return await generateRandomNames(session, diceAdapter, 'jp', count);
+      return await generateRandomNames(session, ctx, diceAdapter, 'jp', count);
     });
 
   // .name.en [数量] - 英文姓名
@@ -209,7 +209,7 @@ export function registerNicknameCommands(
     .subcommand('.en [count:number]', '英文姓名')
     .usage('生成英文姓名')
     .action(async ({ session }, count = 1) => {
-      return await generateRandomNames(session, diceAdapter, 'en', count);
+      return await generateRandomNames(session, ctx, diceAdapter, 'en', count);
     });
 }
 
@@ -217,7 +217,7 @@ export function registerNicknameCommands(
  * 生成随机昵称并设置
  */
 async function generateRandomNickname(
-  session: any,
+  session: Session,
   ctx: Context,
   diceAdapter: DiceAdapter,
   type: string
@@ -263,7 +263,8 @@ async function generateRandomNickname(
  * 生成随机姓名（不设置）
  */
 async function generateRandomNames(
-  session: any,
+  session: Session,
+  ctx: Context,
   diceAdapter: DiceAdapter,
   type: string,
   count: number
@@ -295,11 +296,12 @@ async function generateRandomNames(
     }
 
     const names = result.cards.map((name) => name.trim());
+    const nickname = await getUserNickname(session, ctx);
 
     if (count === 1) {
-      return `${session.username} 随机姓名：${names[0]}`;
+      return `${nickname} 随机姓名：${names[0]}`;
     } else {
-      return `${session.username} 随机姓名：\n${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}`;
+      return `${nickname} 随机姓名：\n${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}`;
     }
   } catch (error) {
     logger.error('随机姓名错误:', error);
