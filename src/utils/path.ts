@@ -5,9 +5,8 @@ import { existsSync, mkdirSync } from 'node:fs';
  * 获取 Koishi 数据目录路径
  * @returns 数据目录路径
  */
-export function getDataPath(): string {
-  // Koishi 的数据目录通常在工作目录的 data 文件夹下
-  const dataDir = resolve(process.cwd(), 'data', 'koidice');
+export function getDataPath(baseDir = process.cwd()): string {
+  const dataDir = resolve(baseDir, 'data', 'koidice');
 
   // 确保目录存在
   if (!existsSync(dataDir)) {

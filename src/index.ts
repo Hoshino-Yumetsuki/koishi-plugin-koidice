@@ -30,7 +30,7 @@ export async function apply(ctx: Context, config: Config) {
 
   // 确保数据目录存在
   try {
-    const dataPath = getDataPath();
+    const dataPath = getDataPath(ctx.baseDir);
     logger.info(`数据目录: ${dataPath}`);
   } catch (error) {
     logger.error('创建数据目录失败:', error);
