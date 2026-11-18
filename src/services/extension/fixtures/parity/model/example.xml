@@ -1,0 +1,12 @@
+<model name="Example">
+  <property>
+    <attr name="力量" alias="STR"/>
+    <attr name="体力"/>
+  </property>
+  <presets>
+    <preset name="pc">
+      <attr name="力量">40</attr>
+      <attr name="体力" text="javascript">this.STR / 2</attr>
+    </preset>
+  </presets>
+</model>

@@ -1,0 +1,14 @@
+[reply.lua]
+type = "Order"
+keyword.match = ".luatest"
+echo = { lua = "hello" }
+
+[reply.js]
+type = "Order"
+keyword.match = ".jstest"
+echo = { js = "hellojs" }
+
+[reply.text]
+type = "Reply"
+keyword.match = "fixture hello"
+echo = "hello {nick}"

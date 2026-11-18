@@ -1,0 +1,5 @@
+[
+  { "input": "fixture local", "nickname": "Ada", "output": "local hello Ada" },
+  { "input": ".local hello", "userId": "42", "output": "local 42:hello" },
+  { "event": "message", "platform": "mock", "selfId": "bot", "userId": "42", "content": "hello", "callbackResult": "Message:42:hello", "sentMessages": [] }
+]

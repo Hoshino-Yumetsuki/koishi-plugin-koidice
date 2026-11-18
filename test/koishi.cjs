@@ -1,0 +1,141 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { mkdtemp, mkdir, cp, rm } = require('node:fs/promises');
+const { join } = require('node:path');
+const { tmpdir } = require('node:os');
+const { App } = require('koishi');
+const memory = require('@koishijs/plugin-database-memory').default;
+const mock = require('@koishijs/plugin-mock').default;
+const plugin = require('../lib/index.cjs');
+
+for (const diceStyleCommands of [false, true]) {
+  test(diceStyleCommands ? 'Dice! punctuation' : 'Koishi namespace', async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), 'koidice-'));
+    const app = new App({ prefix: ['/'], delay: { message: 0 } });
+    app.baseDir = dir;
+    t.after(async () => {
+      try { await app.stop(); } finally { await rm(dir, { recursive: true, force: true }); }
+    });
+    const plugins = join(dir, 'data', 'koidice', 'plugins');
+    await mkdir(plugins, { recursive: true });
+    await cp(join(__dirname, '../src/services/extension/fixtures/parity'), join(plugins, 'parity'), { recursive: true });
+    app.plugin(memory);
+    app.plugin(mock);
+    app.command('group <target:string>').action((_, target) => `宿主群管：${target}`);
+    app.plugin(plugin, { diceStyleCommands });
+    await app.start();
+    await app.mock.initChannel('room');
+    await app.mock.initUser('101', 4);
+    await app.mock.initUser('102', 1);
+    const gm = app.mock.client('101', 'room');
+    const player = app.mock.client('102', 'room');
+    gm.event.member = { roles: [{ id: 'admin' }] };
+    const prefix = diceStyleCommands ? '.' : '/koid.';
+    const send = async (message, client = gm) => (await client.receive(prefix + message)).join('\n');
+    const privates = [];
+    app.mock.bots[0].sendPrivateMessage = async (id, body) => {
+      privates.push({ id, body: String(body) });
+      return ['delivered'];
+    };
+
+    await send('set 20');
+    assert.match(await send('r'), /1D20/i);
+    assert.match(await send('ra 50'), /\/50/);
+    assert.match(await send('sc0/0 70'), /70/);
+    for (const command of ['ti', 'li']) {
+      const symptom = await send(command);
+      assert.match(symptom, command === 'ti' ? /临时疯狂症状/ : /永久\/不定疯狂症状/);
+      assert.doesNotMatch(symptom, /\{(?:dur|pc|nick|detail_roll|detail)\}/);
+    }
+    assert.match(await send('r1d1# 采样'), /采样.*1D20/i);
+    assert.match(await send('r4df'), /4DF=/i);
+    assert.match(await send('rc 侦察'), /\/25\b/);
+    assert.equal((await send('coc6s2')).match(/资产:/g)?.length, 2);
+    assert.match(await send('coc11'), /1-10/);
+    if (diceStyleCommands) assert.match((await gm.receive('．r1d1'))[0], /1D1=1/i);
+    await send('pc new Investigator');
+    await send('st STR61');
+    await send('pc build Investigator');
+    const sheet = await send('pc show Investigator');
+    assert.match(sheet, /力量: 61\b/);
+    assert.match(sheet, /教育: \d+/);
+    assert.match(await send('pc new Example:pc:Hero'), /力量=40.*体力=20/s);
+    assert.doesNotMatch(await send('pc new Example:missing:Invalid'), /已创建/);
+    assert.match(await send('pc type'), /Example/);
+    assert.match(await send('pc tojson'), /"体力"\s*:\s*20/);
+    assert.match(await send('rc Investigator::力量+9/2 搜索'), /搜索.*\/35\b/);
+    assert.match(await send('rc 简单力量'), /\/80\b/);
+    await send('set 1');
+    await send('r');
+    assert.match(await send('pc stat'), /D1统计次数: 1/);
+    await send('game new Delta');
+    await send('setcoc7');
+    assert.match(await send('game set rr_rc'), /rr_rc = 7/);
+    await send('setcoc clr');
+    assert.match(await send('setcoc show'), /房规: 0/);
+    await send('game rou 2');
+    assert.match(await send('r1d2+0d2'), /为0/);
+    assert.match(await send('r2d2+1'), /=4\b/);
+    assert.match(await send('game rou hist'), /D2: (?:1 2|2 1)\b/);
+    await send('ri 80 Boss');
+    assert.match(await send('init'), /Boss: 80\b/);
+
+    await send('nn Alice');
+    const tiles = (await send('draw 麻将牌 136')).split('抽取了: ')[1].split(' | ');
+    const counts = new Map();
+    for (const tile of tiles) counts.set(tile, (counts.get(tile) ?? 0) + 1);
+    assert.equal(counts.size, 34);
+    assert.ok([...counts.values()].every(count => count === 4));
+    await send('deck new clue=A|B');
+    assert.match(await send('deck reset clue', player), /权限/);
+    await send('ob join', player);
+    const checkReceipt = await send('rah 73');
+    assert.match(checkReceipt, /暗中检定/);
+    assert.doesNotMatch(checkReceipt, /\/73/);
+    assert.ok(privates.some(packet => packet.id === '102' && /\/73/.test(packet.body)));
+    const receipt = await send('drawh clue 2');
+    assert.match(receipt, /Alice.*暗抽/);
+    assert.doesNotMatch(receipt, /(?:A \| B|B \| A)/);
+    for (const id of ['101', '102']) assert.ok(privates.some(packet => packet.id === id && /A \| B|B \| A/.test(packet.body)));
+    assert.match(await send('draw clue'), /空/);
+    assert.match(await send('chan.settings draw off', player), /仅群管理员/);
+    await send('chan.settings draw off');
+    assert.equal(await send('draw clue'), '');
+    await send('chan.settings draw on');
+    assert.match(await send('draw clue'), /空/);
+    assert.equal(await send('dismiss'), '');
+    assert.equal(await send('group diver'), '');
+
+    assert.deepEqual(await gm.receive('.luatest'), ['lua 101']);
+    assert.deepEqual(await gm.receive('.jstest'), ['js 101']);
+    assert.deepEqual(await gm.receive('fixture local'), ['local hello Alice']);
+    assert.deepEqual(await gm.receive('.local hi'), ['local 101:hi']);
+    const investigate = async (client) => {
+      const session = app.mock.bots[0].session({ ...client.event, type: 'message' });
+      session.content = '调查钟楼';
+      await app.parallel(session, 'message', session);
+    };
+    await investigate(gm);
+    await investigate(gm);
+    assert.deepEqual(await gm.receive('.clue-data'), ['调查钟楼:101']);
+    await investigate(player);
+    assert.deepEqual(await player.receive('.clue-data'), [':101']);
+    assert.match((await gm.receive('.clue-fail'))[0], /\[Error\]/);
+    assert.deepEqual(await gm.receive('.clue-data'), ['调查钟楼:101']);
+    await send('helpdoc 钟楼 三楼有钟');
+    assert.equal(await send('help 钟楼'), '三楼有钟');
+    await send('reply 秘密口令 铁钥匙');
+    assert.deepEqual(await gm.receive('秘密口令'), ['铁钥匙']);
+    await send('reply off');
+    assert.deepEqual(await gm.receive('fixture hello'), []);
+    assert.deepEqual(await gm.receive('秘密口令'), []);
+    await send('reply on');
+    assert.deepEqual(await gm.receive('fixture hello'), ['hello Alice']);
+    await send('bot off');
+    assert.equal(await send('r1d1'), '');
+    assert.deepEqual(await gm.receive('/group room'), ['宿主群管：room']);
+    await send('bot on');
+    assert.match(await send('r1d1'), /Alice.*1D1=1/i);
+    assert.deepEqual(await gm.receive(diceStyleCommands ? '/koidice.r 1d1' : '.r 1d1'), []);
+  });
+}
