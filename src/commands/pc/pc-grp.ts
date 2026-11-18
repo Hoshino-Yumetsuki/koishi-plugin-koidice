@@ -1,7 +1,8 @@
 /**
  * .pc grp 列出各群绑定卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc grp 命令
  */
-export function registerPcGrpCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcGrpCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.grp', '列出各群绑定的人物卡')
+  register('pc.grp', '列出各群绑定的人物卡')
     .usage('.pc.grp')
     .example('.pc.grp')
     .action(async ({ session }) => {

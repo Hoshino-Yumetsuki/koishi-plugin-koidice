@@ -1,7 +1,8 @@
 /**
  * .pc stat 查看角色掷骰统计命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc stat 命令
  */
-export function registerPcStatCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcStatCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.stat [cardName:text]', '查看角色掷骰统计')
+  register('pc.stat [cardName:text]', '查看角色掷骰统计')
     .usage('.pc.stat ([卡名])')
     .example('.pc.stat')
     .example('.pc.stat Alice')

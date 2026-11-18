@@ -1,5 +1,6 @@
 import type { Context } from 'koishi';
 import type { Config } from './config';
+import { createCommandRegistrar } from './command-scope';
 import type { ExtensionService } from './services/extension-service';
 import { getDiceAdapter, type DiceAdapter } from './wasm';
 import { logger } from './index';
@@ -47,38 +48,32 @@ export async function registerCommands(
     throw new Error('Dice adapter not initialized');
   }
 
-  // 创建主命令
-  const koidice = ctx
-    .command('koidice', 'Dice! TRPG骰子机器人')
-    .alias('koid')
-    .usage('使用 koidice.<子命令> 或 koid.<子命令> 调用功能');
-
-  // 注册所有子命令
-  registerDeckCommands(koidice, config, diceAdapter);
-  registerAttributeCharacterCommands(koidice, ctx, diceAdapter, extensionService || undefined);
-  registerRollCommand(koidice, ctx, config, diceAdapter);
-  registerNicknameCommands(koidice, ctx, config, diceAdapter);
-  registerAnkoCommands(koidice, config);
-  registerGameCommands(koidice, ctx, config);
+  const register = createCommandRegistrar(ctx, config.diceStyleCommands);
+  registerDeckCommands(register, config, diceAdapter);
+  registerAttributeCharacterCommands(register, ctx, diceAdapter, extensionService || undefined);
+  registerRollCommand(register, ctx, config, diceAdapter);
+  registerNicknameCommands(register, ctx, config, diceAdapter);
+  registerAnkoCommands(register, config);
+  registerGameCommands(register, ctx, config);
 
   if (config.enableCOC) {
-    registerCheckCommand(koidice, ctx, config, diceAdapter);
-    registerCOCCommands(koidice, ctx, config, diceAdapter);
-    registerInsanityCommands(koidice, config, diceAdapter);
+    registerCheckCommand(register, ctx, config, diceAdapter);
+    registerCOCCommands(register, ctx, config, diceAdapter);
+    registerInsanityCommands(register, config, diceAdapter);
   }
 
   if (config.enableDND) {
-    registerDNDGeneratorCommand(koidice, config, diceAdapter);
+    registerDNDGeneratorCommand(register, config, diceAdapter);
   }
 
-  registerInitiativeCommands(koidice, ctx, config, diceAdapter);
-  registerSettingsCommands(koidice, ctx, config, diceAdapter);
-  registerObserverCommands(koidice, ctx, config, diceAdapter);
-  registerWODCommands(koidice, ctx, config, diceAdapter);
-  registerRuleCommands(koidice, config, diceAdapter, ctx, extensionService);
+  registerInitiativeCommands(register, ctx, config, diceAdapter);
+  registerSettingsCommands(register, ctx, config, diceAdapter);
+  registerObserverCommands(register, ctx, config, diceAdapter);
+  registerWODCommands(register, ctx, config, diceAdapter);
+  registerRuleCommands(register, config, diceAdapter, ctx, extensionService);
 
   // 注册扩展管理命令
   if (extensionService) {
-    registerExtensionCommands(koidice, ctx, config, extensionService);
+    registerExtensionCommands(register, ctx, config, extensionService);
   }
 }

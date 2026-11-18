@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import { logger } from '../index';
 import type { ExtensionService } from '../services/extension-service';
@@ -7,7 +8,7 @@ import type { ExtensionService } from '../services/extension-service';
  * 扩展管理命令 .ext
  */
 export function registerExtensionCommands(
-  parent: Command,
+  register: RegisterCommand,
   _ctx: Context,
   _config: Config,
   extensionService: ExtensionService
@@ -16,7 +17,7 @@ export function registerExtensionCommands(
     return;
   }
 
-  const cmd = parent.subcommand('.ext', '扩展/插件管理').usage('管理 Lua/JS 扩展插件');
+  const cmd = register('ext', '扩展/插件管理').usage('管理 Lua/JS 扩展插件');
 
   // 列出所有插件
   cmd

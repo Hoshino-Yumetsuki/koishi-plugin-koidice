@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -15,17 +16,14 @@ import { CharacterService } from '../services/character-service';
  * .rc3#b技能名 成功率 - 3轮带奖励骰
  */
 export function registerCheckCommand(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.rc [expression:text]', '技能检定')
-    .alias('.ra')
-    .alias('.check')
+  register('rc [expression:text]', '技能检定', 'ra', 'check')
     .action(async ({ session }, expression) => {
       if (!session) {
         return '无法获取会话信息';

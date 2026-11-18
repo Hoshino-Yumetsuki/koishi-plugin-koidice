@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { Config } from '../../config';
 import type { DiceAdapter } from '../../wasm';
 import { logger } from '../../index';
@@ -16,15 +17,14 @@ import { CharacterService } from '../../services/character-service';
  * .sc 1d10/1d100 直面外神 - 带原因
  */
 export function registerSanityCheckCommand(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.sc [...args:text]', '理智检定')
+  register('sc [...args:text]', '理智检定')
     .usage('用法: .sc [成功损失]/[失败损失] ([当前san值]) ([原因])')
     .example('.sc 0/1d6 - 从人物卡获取SAN值')
     .example('.sc 0/1d6 70 - 指定当前SAN值为70')

@@ -1,14 +1,14 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { parseStCommand } from './parser';
 import { logger } from '../../index';
 
-export function registerStSetCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerStSetCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.st [...args:text]', '人物卡管理')
+  register('st [...args:text]', '人物卡管理')
     .usage('.st [人物卡名--]属性名 属性值 [属性名 属性值]...')
     .example('.st 力量 60 敏捷 70')
     .example('.st Alice--力量 60 体质 40')

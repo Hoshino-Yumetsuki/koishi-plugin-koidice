@@ -1,7 +1,8 @@
 /**
  * .pc show 展示人物卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc show 命令
  */
-export function registerPcShowCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcShowCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.show [cardName:text]', '展示人物卡属性')
+  register('pc.show [cardName:text]', '展示人物卡属性')
     .usage('.pc.show ([卡名])')
     .example('.pc.show')
     .example('.pc.show Alice')

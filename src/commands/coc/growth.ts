@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { Config } from '../../config';
 import type { DiceAdapter } from '../../wasm';
 import { logger } from '../../index';
@@ -69,15 +70,14 @@ function parseGrowthCommand(args: string[]): ParsedGrowthArgs | null {
  * .en 幸运 +1D3/1D10 幸运成长 - Pulp规则中的幸运成长
  */
 export function registerGrowthCommand(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.en [...args:text]', '成长检定')
+  register('en [...args:text]', '成长检定')
     .usage('用法: .en [技能名称]([技能值]) [原因]')
     .example('.en 教育 - 从人物卡获取教育值进行成长检定')
     .example('.en 教育 60 - 对教育60进行成长检定')

@@ -1,7 +1,8 @@
 /**
  * .pc cpy 复制人物卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc cpy 命令
  */
-export function registerPcCpyCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcCpyCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.cpy <args:text>', '复制人物卡')
+  register('pc.cpy <args:text>', '复制人物卡')
     .usage('.pc.cpy [卡名1]=[卡名2]')
     .example('.pc.cpy Alice=Bob')
     .action(async ({ session }, args) => {

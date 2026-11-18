@@ -1,4 +1,5 @@
-import type { Command, Context, Session } from 'koishi';
+import type { Context, Session } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -85,13 +86,13 @@ async function saveSettings(
  * 设置命令 .set / .setcoc / .nn
  */
 export function registerSettingsCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   _diceAdapter: DiceAdapter
 ) {
   // 设置默认骰
-  parent.subcommand('.set [dice:number]', '设置默认骰面数').action(async ({ session }, dice) => {
+  register('set [dice:number]', '设置默认骰面数').action(async ({ session }, dice) => {
     if (!session) {
       return '无法获取会话信息';
     }
@@ -120,8 +121,7 @@ export function registerSettingsCommands(
   });
 
   // 设置COC房规
-  parent
-    .subcommand('.setcoc [rule:number]', '设置COC检定房规')
+  register('setcoc [rule:number]', '设置COC检定房规')
     .action(async ({ session }, rule) => {
       if (!session) {
         return '无法获取会话信息';
@@ -158,7 +158,7 @@ export function registerSettingsCommands(
     });
 
   // 设置昵称
-  parent.subcommand('.nn [nickname:text]', '设置昵称').action(async ({ session }, nickname) => {
+  register('nn [nickname:text]', '设置昵称').action(async ({ session }, nickname) => {
     if (!session) {
       return '无法获取会话信息';
     }

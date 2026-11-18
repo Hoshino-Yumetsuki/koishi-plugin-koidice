@@ -1,7 +1,8 @@
 /**
  * .pc list 列出所有人物卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc list 命令
  */
-export function registerPcListCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcListCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.list', '列出所有人物卡')
+  register('pc.list', '列出所有人物卡')
     .usage('.pc.list')
     .example('.pc.list')
     .action(async ({ session }) => {

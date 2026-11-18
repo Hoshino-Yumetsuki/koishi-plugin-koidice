@@ -1,7 +1,8 @@
 /**
  * .pc nn 重命名人物卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc nn 命令
  */
-export function registerPcNnCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcNnCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.nn <newName:text>', '重命名当前人物卡')
+  register('pc.nn <newName:text>', '重命名当前人物卡')
     .usage('.pc.nn [新卡名]')
     .example('.pc.nn Bob')
     .action(async ({ session }, newName) => {

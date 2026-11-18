@@ -1,7 +1,8 @@
 /**
  * .st show 展示属性命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { parseAttributeList } from './parser';
@@ -10,11 +11,10 @@ import { logger } from '../../index';
 /**
  * 注册 .st show 命令
  */
-export function registerStShowCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerStShowCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.st.show [args:text]', '查看人物卡属性')
+  register('st.show [args:text]', '查看人物卡属性')
     .usage('.st.show [人物卡名--][属性名...]')
     .example('.st.show')
     .example('.st.show all')

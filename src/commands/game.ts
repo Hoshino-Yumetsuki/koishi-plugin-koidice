@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import { logger } from '../index';
 import { GameSessionService } from '../services/game-session-service';
@@ -6,10 +7,10 @@ import { GameSessionService } from '../services/game-session-service';
 /**
  * 游戏会话命令 .game
  */
-export function registerGameCommands(parent: Command, ctx: Context, _config: Config) {
+export function registerGameCommands(register: RegisterCommand, ctx: Context, _config: Config) {
   const gameService = new GameSessionService(ctx);
 
-  const cmd = parent.subcommand('.game', '游戏会话管理').usage('管理 TRPG 游戏会话');
+  const cmd = register('game', '游戏会话管理').usage('管理 TRPG 游戏会话');
 
   // .game new - 创建游戏
   cmd.subcommand('.new [name:text]', '创建新游戏').action(async ({ session }, name) => {

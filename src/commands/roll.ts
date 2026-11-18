@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -13,14 +14,13 @@ import { getObservers } from './observer';
  * - 简化输出: .rs 1d10+1d6+3 (只显示结果)
  */
 export function registerRollCommand(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   config: Config,
   diceAdapter: DiceAdapter
 ) {
   // 注册 .r 命令（普通掷骰）
-  parent
-    .subcommand('.r [...args:text]', '掷骰')
+  register('r [...args:text]', '掷骰')
     .usage('用法: .r [掷骰表达式] [原因]')
     .example('.r 1d100 - 掷一个百面骰')
     .example('.r 3#1d6 伤害 - 掷3次d6')
@@ -30,24 +30,21 @@ export function registerRollCommand(
     });
 
   // 注册 .rh 命令（暗骰）
-  parent
-    .subcommand('.rh [...args:text]', '暗骰')
+  register('rh [...args:text]', '暗骰')
     .usage('用法: .rh [掷骰表达式] [原因]')
     .action(async ({ session }, ...args) => {
       return await handleRollCommand(session, ctx, diceAdapter, config, true, false, args);
     });
 
   // 注册 .rs 命令（简化输出）
-  parent
-    .subcommand('.rs [...args:text]', '掷骰（简化输出）')
+  register('rs [...args:text]', '掷骰（简化输出）')
     .usage('用法: .rs [掷骰表达式] [原因]')
     .action(async ({ session }, ...args) => {
       return await handleRollCommand(session, ctx, diceAdapter, config, false, true, args);
     });
 
   // 注册 .rsh 命令（暗骰+简化输出）
-  parent
-    .subcommand('.rsh [...args:text]', '暗骰（简化输出）')
+  register('rsh [...args:text]', '暗骰（简化输出）')
     .usage('用法: .rsh [掷骰表达式] [原因]')
     .action(async ({ session }, ...args) => {
       return await handleRollCommand(session, ctx, diceAdapter, config, true, true, args);

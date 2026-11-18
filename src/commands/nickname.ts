@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -94,14 +95,13 @@ async function deleteUserNickname(
  * 注册昵称相关命令
  */
 export function registerNicknameCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
   // .nn 称呼管理主命令
-  const nn = parent
-    .subcommand('.nn <nickname:text>', '设置称呼')
+  const nn = register('nn <nickname:text>', '设置称呼')
     .usage('用法: .nn <昵称>')
     .example('.nn kp - 设置昵称为kp')
     .action(async ({ session }, nickname) => {
@@ -149,8 +149,7 @@ export function registerNicknameCommands(
     });
 
   // .nnn 随机昵称主命令
-  const nnn = parent
-    .subcommand('.nnn', '随机昵称')
+  const nnn = register('nnn', '随机昵称')
     .usage('从牌堆随机生成昵称并设置')
     .action(async ({ session }) => {
       return await generateRandomNickname(session, ctx, diceAdapter, '');
@@ -181,8 +180,7 @@ export function registerNicknameCommands(
     });
 
   // .name 随机姓名主命令（不设置，只显示）
-  const name = parent
-    .subcommand('.name [count:number]', '随机姓名')
+  const name = register('name [count:number]', '随机姓名')
     .usage('生成随机姓名（不设置为昵称）')
     .example('.name - 生成1个随机姓名')
     .example('.name 10 - 生成10个随机姓名')

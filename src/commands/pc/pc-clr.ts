@@ -1,7 +1,8 @@
 /**
  * .pc clr 清空所有人物卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc clr 命令
  */
-export function registerPcClrCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcClrCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.clr', '清空所有人物卡')
+  register('pc.clr', '清空所有人物卡')
     .usage('.pc.clr')
     .example('.pc.clr')
     .action(async ({ session }) => {

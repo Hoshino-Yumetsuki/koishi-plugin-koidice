@@ -1,14 +1,14 @@
-import type { Command } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
 
 export function registerDNDGeneratorCommand(
-  parent: Command,
+  register: RegisterCommand,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
-  parent.subcommand('.dnd [count:number]', 'DND人物作成').action(async ({ session }, count = 1) => {
+  register('dnd [count:number]', 'DND人物作成').action(async ({ session }, count = 1) => {
     if (!session) {
       return '无法获取会话信息';
     }

@@ -1,7 +1,8 @@
 /**
  * .pc del 删除人物卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc del 命令
  */
-export function registerPcDelCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcDelCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.del <cardName:text>', '删除人物卡')
+  register('pc.del <cardName:text>', '删除人物卡')
     .usage('.pc.del [卡名]')
     .example('.pc.del Alice')
     .action(async ({ session }, cardName) => {

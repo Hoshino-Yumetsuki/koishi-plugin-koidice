@@ -1,4 +1,4 @@
-import type { Command } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -6,11 +6,9 @@ import { logger } from '../index';
 /**
  * 牌堆命令 .draw / .deck
  */
-export function registerDeckCommands(parent: Command, _config: Config, diceAdapter: DiceAdapter) {
+export function registerDeckCommands(register: RegisterCommand, _config: Config, diceAdapter: DiceAdapter) {
   // 抽卡命令
-  parent
-    .subcommand('.draw <deckName:text> [count:number]', '从牌堆抽卡')
-    .alias('.deck')
+  register('draw <deckName:text> [count:number]', '从牌堆抽卡', 'deck')
     .action(async ({ session }, deckName, count = 1) => {
       if (!session) {
         return '无法获取会话信息';
@@ -44,7 +42,7 @@ export function registerDeckCommands(parent: Command, _config: Config, diceAdapt
     });
 
   // 列出牌堆
-  parent.subcommand('.draw.list', '列出所有牌堆').action(async () => {
+  register('draw.list', '列出所有牌堆').action(async () => {
     try {
       return diceAdapter.listDecks();
     } catch (error) {

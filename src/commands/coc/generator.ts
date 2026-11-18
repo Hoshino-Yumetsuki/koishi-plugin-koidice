@@ -1,4 +1,4 @@
-import type { Command } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { Config } from '../../config';
 import type { DiceAdapter } from '../../wasm';
 import { logger } from '../../index';
@@ -16,12 +16,12 @@ import { logger } from '../../index';
  * .coc7d - COC7版详细生成（含背景）
  */
 export function registerCOCGeneratorCommand(
-  parent: Command,
+  register: RegisterCommand,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
   // 基础 .coc 命令
-  parent.subcommand('.coc [param:text]', 'COC人物作成').action(async ({ session }, param) => {
+  register('coc [param:text]', 'COC人物作成').action(async ({ session }, param) => {
     if (!session) {
       return '无法获取会话信息';
     }
@@ -108,7 +108,7 @@ export function registerCOCGeneratorCommand(
   });
 
   // .coc6 别名
-  parent.subcommand('.coc6 [count:text]', 'COC6版人物作成').action(async ({ session }, count) => {
+  register('coc6 [count:text]', 'COC6版人物作成').action(async ({ session }, count) => {
     if (!session) {
       return '无法获取会话信息';
     }
@@ -149,7 +149,7 @@ export function registerCOCGeneratorCommand(
   });
 
   // .coc7 别名
-  parent.subcommand('.coc7 [count:text]', 'COC7版人物作成').action(async ({ session }, count) => {
+  register('coc7 [count:text]', 'COC7版人物作成').action(async ({ session }, count) => {
     if (!session) {
       return '无法获取会话信息';
     }
@@ -190,7 +190,7 @@ export function registerCOCGeneratorCommand(
   });
 
   // .cocd 别名（详细版）
-  parent.subcommand('.cocd', 'COC7版详细人物作成（含背景）').action(async ({ session }) => {
+  register('cocd', 'COC7版详细人物作成（含背景）').action(async ({ session }) => {
     if (!session) {
       return '无法获取会话信息';
     }
@@ -208,7 +208,7 @@ export function registerCOCGeneratorCommand(
   });
 
   // .coc6d 别名（详细版）
-  parent.subcommand('.coc6d', 'COC6版详细人物作成（含背景）').action(async ({ session }) => {
+  register('coc6d', 'COC6版详细人物作成（含背景）').action(async ({ session }) => {
     if (!session) {
       return '无法获取会话信息';
     }
@@ -226,7 +226,7 @@ export function registerCOCGeneratorCommand(
   });
 
   // .coc7d 别名（详细版）
-  parent.subcommand('.coc7d', 'COC7版详细人物作成（含背景）').action(async ({ session }) => {
+  register('coc7d', 'COC7版详细人物作成（含背景）').action(async ({ session }) => {
     if (!session) {
       return '无法获取会话信息';
     }

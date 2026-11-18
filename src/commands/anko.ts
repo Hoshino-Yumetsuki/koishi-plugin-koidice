@@ -1,4 +1,4 @@
-import type { Command } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import { logger } from '../index';
 
@@ -18,9 +18,8 @@ const ankoSessions = new Map<string, AnkoSession>();
 /**
  * 安价命令 .ak
  */
-export function registerAnkoCommands(parent: Command, _config: Config) {
-  const cmd = parent
-    .subcommand('.ak [...args:text]', '安价/安科 - 分歧选择系统')
+export function registerAnkoCommands(register: RegisterCommand, _config: Config) {
+  const cmd = register('ak [...args:text]', '安价/安科 - 分歧选择系统')
     .usage(
       '安价/安科命令\n' +
         '.ak# [标题] 或 .ak new [标题] - 新建分歧\n' +

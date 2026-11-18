@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { Config } from '../../config';
 import type { DiceAdapter } from '../../wasm';
 
@@ -8,20 +9,20 @@ import { registerCOCGeneratorCommand } from './generator';
 
 /**
  * 注册所有COC相关命令
- * @param parent 父命令
+ * @param register 命令注册函数
  * @param ctx Koishi Context
  * @param config 配置
  * @param diceAdapter Dice适配器
  */
 export function registerCOCCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   config: Config,
   diceAdapter: DiceAdapter
 ) {
-  registerGrowthCommand(parent, ctx, config, diceAdapter);
-  registerSanityCheckCommand(parent, ctx, config, diceAdapter);
-  registerCOCGeneratorCommand(parent, config, diceAdapter);
+  registerGrowthCommand(register, ctx, config, diceAdapter);
+  registerSanityCheckCommand(register, ctx, config, diceAdapter);
+  registerCOCGeneratorCommand(register, config, diceAdapter);
 }
 
 // 导出各个子模块

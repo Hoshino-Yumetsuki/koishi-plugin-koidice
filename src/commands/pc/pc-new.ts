@@ -1,7 +1,8 @@
 /**
  * .pc new 创建新人物卡命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import type { ExtensionService } from '../../services/extension-service';
@@ -12,15 +13,14 @@ import { logger } from '../../index';
  * 注册 .pc new 命令
  */
 export function registerPcNewCommand(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   diceAdapter: DiceAdapter,
   extensionService?: ExtensionService
 ) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.new [args:text]', '创建新人物卡')
+  register('pc.new [args:text]', '创建新人物卡')
     .usage('.pc.new ([模板]:([生成参数]:))([卡名])')
     .example('.pc.new')
     .example('.pc.new Alice')

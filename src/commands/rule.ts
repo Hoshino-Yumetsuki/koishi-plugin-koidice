@@ -1,4 +1,5 @@
-import type { Context, Command } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -417,15 +418,14 @@ function findRemoteRule(system: string, keyword: string): RuleEntry | null {
  * 规则速查命令 .rule / .rules
  */
 export function registerRuleCommands(
-  parent: Command,
+  register: RegisterCommand,
   _config: Config,
   _diceAdapter: DiceAdapter,
   _ctx: Context,
   extensionService?: any
 ) {
   // 主命令：规则查询
-  parent
-    .subcommand('.rule [query:text]', '规则速查')
+  register('rule [query:text]', '规则速查')
     .usage('查询规则词条')
     .example('.rule 大成功')
     .example('.rule coc:侦查')
@@ -500,7 +500,7 @@ export function registerRuleCommands(
     });
 
   // 子命令：列出规则
-  parent.subcommand('.rule.list', '列出所有规则').action(async () => {
+  register('rule.list', '列出所有规则').action(async () => {
     try {
       let result = `=== 本地规则 ===\n`;
       let totalRules = 0;

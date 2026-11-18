@@ -2,7 +2,8 @@
  * 人物卡命令模块
  * 导出所有人物卡相关命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import type { ExtensionService } from '../../services/extension-service';
 import { registerStSetCommand } from './st-set';
@@ -13,20 +14,20 @@ import { registerStClrCommand } from './st-clr';
 import { registerPcCommands } from '../pc';
 
 export function registerCharacterCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   diceAdapter: DiceAdapter,
   extensionService?: ExtensionService
 ) {
-  registerStShowCommand(parent, ctx, diceAdapter);
-  registerStSwitchCommand(parent, ctx, diceAdapter);
-  registerStDelCommand(parent, ctx, diceAdapter);
-  registerStClrCommand(parent, ctx, diceAdapter);
+  registerStShowCommand(register, ctx, diceAdapter);
+  registerStSwitchCommand(register, ctx, diceAdapter);
+  registerStDelCommand(register, ctx, diceAdapter);
+  registerStClrCommand(register, ctx, diceAdapter);
 
-  registerStSetCommand(parent, ctx, diceAdapter);
+  registerStSetCommand(register, ctx, diceAdapter);
 
   // 注册.pc多人物卡命令
-  registerPcCommands(parent, ctx, diceAdapter, extensionService);
+  registerPcCommands(register, ctx, diceAdapter, extensionService);
 }
 
 export * from './types';

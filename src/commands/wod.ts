@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -15,7 +16,7 @@ import { CharacterService } from '../services/character-service';
  * 最后计算点数达到8的骰子数
  */
 export function registerWODCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
@@ -23,8 +24,7 @@ export function registerWODCommands(
   const characterService = new CharacterService(ctx, diceAdapter);
 
   // .ww 骰池（显示详细）
-  parent
-    .subcommand('.ww [...args:text]', 'WOD骰池（显示详细）')
+  register('ww [...args:text]', 'WOD骰池（显示详细）')
     .usage('用法: .ww <骰子数>a<加骰线> 或 .ww <表达式>')
     .example('.ww 10a8 - 投10个骰子，8点及以上加骰')
     .example('.ww 敏捷+剑 - 从人物卡调用属性')
@@ -55,8 +55,7 @@ export function registerWODCommands(
     });
 
   // .w 骰池（只显示结果）
-  parent
-    .subcommand('.w [...args:text]', 'WOD骰池（只显示结果）')
+  register('w [...args:text]', 'WOD骰池（只显示结果）')
     .usage('用法: .w <骰子数>a<加骰线> 或 .w <表达式>')
     .example('.w 10a8 - 投10个骰子，8点及以上加骰')
     .example('.w 敏捷+剑 - 从人物卡调用属性')

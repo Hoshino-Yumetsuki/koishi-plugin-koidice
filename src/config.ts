@@ -3,6 +3,7 @@ import { Schema } from 'koishi';
 export interface Config {
   // 基础设置
   defaultDice: number;
+  diceStyleCommands: boolean;
   enableCOC: boolean;
   enableDND: boolean;
   enableCustomDeck: boolean;
@@ -24,6 +25,10 @@ export const Config: Schema<Config> = Schema.intersect([
   // 基础设置
   Schema.object({
     defaultDice: Schema.number().default(100).description('默认骰子面数').min(2).max(1000),
+
+    diceStyleCommands: Schema.boolean()
+      .default(false)
+      .description('使用 Dice! 风格命令（如 .r），不注册 koidice 和 koid 前缀'),
 
     enableCOC: Schema.boolean().default(true).description('启用COC规则支持'),
 

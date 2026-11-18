@@ -2,7 +2,8 @@
  * .pc 多人物卡命令模块
  * 导出所有.pc相关命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import type { ExtensionService } from '../../services/extension-service';
 import { registerPcNewCommand } from './pc-new';
@@ -22,22 +23,22 @@ import { registerPcStatCommand } from './pc-stat';
  * 注册所有.pc命令
  */
 export function registerPcCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   diceAdapter: DiceAdapter,
   extensionService?: ExtensionService
 ) {
   // 注册子命令到parent
-  registerPcNewCommand(parent, ctx, diceAdapter, extensionService);
-  registerPcTagCommand(parent, ctx, diceAdapter);
-  registerPcShowCommand(parent, ctx, diceAdapter);
-  registerPcNnCommand(parent, ctx, diceAdapter);
-  registerPcCpyCommand(parent, ctx, diceAdapter);
-  registerPcDelCommand(parent, ctx, diceAdapter);
-  registerPcListCommand(parent, ctx, diceAdapter);
-  registerPcGrpCommand(parent, ctx, diceAdapter);
-  registerPcBuildCommand(parent, ctx, diceAdapter);
-  registerPcRedoCommand(parent, ctx, diceAdapter);
-  registerPcClrCommand(parent, ctx, diceAdapter);
-  registerPcStatCommand(parent, ctx, diceAdapter);
+  registerPcNewCommand(register, ctx, diceAdapter, extensionService);
+  registerPcTagCommand(register, ctx, diceAdapter);
+  registerPcShowCommand(register, ctx, diceAdapter);
+  registerPcNnCommand(register, ctx, diceAdapter);
+  registerPcCpyCommand(register, ctx, diceAdapter);
+  registerPcDelCommand(register, ctx, diceAdapter);
+  registerPcListCommand(register, ctx, diceAdapter);
+  registerPcGrpCommand(register, ctx, diceAdapter);
+  registerPcBuildCommand(register, ctx, diceAdapter);
+  registerPcRedoCommand(register, ctx, diceAdapter);
+  registerPcClrCommand(register, ctx, diceAdapter);
+  registerPcStatCommand(register, ctx, diceAdapter);
 }

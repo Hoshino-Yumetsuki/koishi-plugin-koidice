@@ -1,7 +1,8 @@
 /**
  * .pc tag 绑定人物卡到群组命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc tag 命令
  */
-export function registerPcTagCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcTagCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.tag [cardName:text]', '绑定人物卡到当前群组')
+  register('pc.tag [cardName:text]', '绑定人物卡到当前群组')
     .usage('.pc.tag ([卡名])')
     .example('.pc.tag Alice')
     .example('.pc.tag')

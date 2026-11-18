@@ -1,7 +1,8 @@
 /**
  * .pc redo 清空并重新生成属性命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc redo 命令
  */
-export function registerPcRedoCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcRedoCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.redo [args:text]', '清空并重新生成人物卡属性')
+  register('pc.redo [args:text]', '清空并重新生成人物卡属性')
     .usage('.pc.redo ([生成参数]:)(卡名)')
     .example('.pc.redo')
     .example('.pc.redo Alice')

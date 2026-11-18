@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -93,14 +94,13 @@ async function deleteInitiative(ctx: Context, channelId: string, platform: strin
  * .init.clr - 清空先攻列表
  */
 export function registerInitiativeCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
   // .init 主命令 - 查看先攻列表
-  const init = parent
-    .subcommand('.init', '先攻列表')
+  const init = register('init', '先攻列表')
     .usage('查看当前先攻列表')
     .action(async ({ session }) => {
       if (!session) {
@@ -240,8 +240,7 @@ export function registerInitiativeCommands(
   });
 
   // .ri - 先攻掷骰
-  parent
-    .subcommand('.ri [...args:text]', '先攻掷骰')
+  register('ri [...args:text]', '先攻掷骰')
     .usage('用法: .ri ([加值/表达式]) ([角色名])')
     .example('.ri - 默认掷1D20')
     .example('.ri -1 某pc - 带加值的先攻')

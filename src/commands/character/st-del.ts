@@ -1,14 +1,14 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { parseAttributeList } from './parser';
 import { logger } from '../../index';
 
-export function registerStDelCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerStDelCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.st.del [args:text]', '删除人物卡属性')
+  register('st.del [args:text]', '删除人物卡属性')
     .usage('.st.del [人物卡名--]属性名 [属性名...]')
     .example('.st.del 力量 敏捷')
     .example('.st.del Alice--力量 敏捷')

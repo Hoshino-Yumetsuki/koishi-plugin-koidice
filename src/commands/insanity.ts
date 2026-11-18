@@ -1,4 +1,4 @@
-import type { Command } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -7,12 +7,12 @@ import { logger } from '../index';
  * 疯狂症状命令 .ti / .li
  */
 export function registerInsanityCommands(
-  parent: Command,
+  register: RegisterCommand,
   _config: Config,
   diceAdapter: DiceAdapter
 ) {
   // 临时疯狂症状 .ti
-  parent.subcommand('.ti', '临时疯狂症状').action(async ({ session }) => {
+  register('ti', '临时疯狂症状').action(async ({ session }) => {
     if (!session) {
       return '无法获取会话信息';
     }
@@ -65,7 +65,7 @@ export function registerInsanityCommands(
   });
 
   // 永久/不定疯狂症状 .li
-  parent.subcommand('.li', '永久/不定疯狂症状').action(async ({ session }) => {
+  register('li', '永久/不定疯狂症状').action(async ({ session }) => {
     if (!session) {
       return '无法获取会话信息';
     }

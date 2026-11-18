@@ -1,4 +1,5 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
@@ -152,12 +153,12 @@ async function clearObservers(ctx: Context, channelId: string, platform: string)
  * 旁观模式命令 .ob
  */
 export function registerObserverCommands(
-  parent: Command,
+  register: RegisterCommand,
   ctx: Context,
   _config: Config,
   _diceAdapter: DiceAdapter
 ) {
-  parent.subcommand('.ob [action:text]', '旁观模式').action(async ({ session }, action) => {
+  register('ob [action:text]', '旁观模式').action(async ({ session }, action) => {
     if (!session) {
       return '无法获取会话信息';
     }

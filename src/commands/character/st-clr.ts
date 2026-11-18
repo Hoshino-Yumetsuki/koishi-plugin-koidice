@@ -1,13 +1,13 @@
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
 
-export function registerStClrCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerStClrCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.st.clr [cardName:text]', '删除人物卡')
+  register('st.clr [cardName:text]', '删除人物卡')
     .usage('.st.clr [人物卡名]')
     .example('.st.clr')
     .example('.st.clr Alice')

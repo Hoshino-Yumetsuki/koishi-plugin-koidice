@@ -1,7 +1,8 @@
 /**
  * .pc build 根据模板生成属性命令
  */
-import type { Command, Context } from 'koishi';
+import type { Context } from 'koishi';
+import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
@@ -9,11 +10,10 @@ import { logger } from '../../index';
 /**
  * 注册 .pc build 命令
  */
-export function registerPcBuildCommand(parent: Command, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcBuildCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  parent
-    .subcommand('.pc.build [args:text]', '为人物卡生成属性')
+  register('pc.build [args:text]', '为人物卡生成属性')
     .usage('.pc.build ([生成参数]:)(卡名)')
     .example('.pc.build')
     .example('.pc.build Alice')
