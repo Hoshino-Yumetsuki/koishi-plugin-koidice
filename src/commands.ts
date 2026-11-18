@@ -53,7 +53,7 @@ export async function registerCommands(
   registerAttributeCharacterCommands(register, ctx, diceAdapter, extensionService || undefined);
   registerRollCommand(register, ctx, config, diceAdapter);
   registerNicknameCommands(register, ctx, config, diceAdapter);
-  registerAnkoCommands(register, config);
+  registerAnkoCommands(register, ctx, config);
   registerGameCommands(register, ctx, config);
 
   if (config.enableCOC) {

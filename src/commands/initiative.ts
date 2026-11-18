@@ -1,335 +1,108 @@
-import type { Context } from 'koishi';
+import type { Context, Session } from 'koishi';
 import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
-import { logger } from '../index';
+import type { RollResult } from '../wasm/types';
+import { GameSessionService } from '../services/game-session-service';
 
-/**
- * 加载先攻列表
- */
-async function loadInitiative(
-  ctx: Context,
-  channelId: string,
-  platform: string,
-  diceAdapter: DiceAdapter
-): Promise<void> {
-  try {
-    const records = await ctx.database.get('koidice_initiative', {
-      channelId,
-      platform
+const queues = new Map<string, Promise<unknown>>();
+
+export function registerInitiativeCommands(register: RegisterCommand, ctx: Context, _config: Config, diceAdapter: DiceAdapter) {
+  const games = new GameSessionService(ctx);
+  const run = async (session: Session, operation: (key: string) => Promise<string>) => {
+    const game = await games.getSession(session);
+    const key = JSON.stringify(game ? [session.platform, `game:${game.id}`] : [session.platform, games.areaKey(session)]);
+    const previous = queues.get(key) || Promise.resolve();
+    const result = previous.catch(() => {}).then(async () => {
+      const [record] = await ctx.database.get('koidice_initiative', { channelId: key, platform: session.platform });
+      diceAdapter.clearInitiative(key);
+      if (record?.data) diceAdapter.deserializeInitiative(key, record.data);
+      return operation(key);
     });
-
-    const content = records[0]?.data;
-    if (content) {
-      diceAdapter.deserializeInitiative(channelId, content);
-    }
-  } catch (error) {
-    logger.error('加载先攻列表失败:', error);
-  }
-}
-
-/**
- * 保存先攻列表
- */
-async function saveInitiative(
-  ctx: Context,
-  channelId: string,
-  platform: string,
-  diceAdapter: DiceAdapter
-): Promise<void> {
-  try {
-    const content = diceAdapter.serializeInitiative(channelId);
-    const existing = await ctx.database.get('koidice_initiative', {
-      channelId,
-      platform
-    });
-
-    const now = new Date();
-
-    if (existing.length > 0) {
-      // 更新现有记录
-      await ctx.database.set(
-        'koidice_initiative',
-        { channelId, platform },
-        {
-          data: content,
-          updatedAt: now
-        }
-      );
-    } else {
-      // 创建新记录
-      await ctx.database.create('koidice_initiative', {
-        channelId,
-        platform,
-        data: content,
-        updatedAt: now
-      });
-    }
-  } catch (error) {
-    logger.error('保存先攻列表失败:', error);
-  }
-}
-
-/**
- * 删除先攻列表
- */
-async function deleteInitiative(ctx: Context, channelId: string, platform: string): Promise<void> {
-  try {
-    await ctx.database.remove('koidice_initiative', {
-      channelId,
-      platform
-    });
-  } catch (error) {
-    logger.error('删除先攻列表失败:', error);
-  }
-}
-
-/**
- * 先攻列表命令 .init / .ri
- * 参考文档：
- * .ri - 先攻掷骰，默认1D20
- * .ri [加值] [角色名] - 带加值的先攻
- * .ri [表达式] [角色名] - 自定义表达式
- * .init - 查看先攻列表
- * .init.clr - 清空先攻列表
- */
-export function registerInitiativeCommands(
-  register: RegisterCommand,
-  ctx: Context,
-  _config: Config,
-  diceAdapter: DiceAdapter
-) {
-  // .init 主命令 - 查看先攻列表
-  const init = register('init', '先攻列表')
-    .usage('查看当前先攻列表')
-    .action(async ({ session }) => {
-      if (!session) {
-        return '无法获取会话信息';
-      }
-
-      try {
-        const channelId = session.channelId || session.userId;
-        const platform = session.platform;
-        if (!channelId) {
-          return '无法获取频道或用户信息';
-        }
-
-        // 加载列表
-        await loadInitiative(ctx, channelId, platform, diceAdapter);
-
-        const count = diceAdapter.getInitiativeCount(channelId);
-
-        if (count === 0) {
-          return '当前没有先攻列表';
-        }
-
-        return diceAdapter.getInitiativeList(channelId);
-      } catch (error) {
-        logger.error('显示先攻列表错误:', error);
-        return '显示先攻列表时发生错误';
-      }
-    });
-
-  // .init.clr - 清空先攻列表
+    queues.set(key, result);
+    try { return await result; } finally { if (queues.get(key) === result) queues.delete(key); }
+  };
+  const save = async (session: Session, key: string) => {
+    const query = { channelId: key, platform: session.platform };
+    const [record] = await ctx.database.get('koidice_initiative', query);
+    const data = diceAdapter.serializeInitiative(key);
+    if (record) await ctx.database.set('koidice_initiative', query, { data, updatedAt: new Date() });
+    else await ctx.database.create('koidice_initiative', { ...query, data, updatedAt: new Date() });
+  };
+  const init = register('init', '先攻列表').action(async ({ session }) => {
+    if (!session?.userId) return '无法获取会话信息';
+    return run(session, async (key) => diceAdapter.getInitiativeCount(key) ? diceAdapter.getInitiativeList(key) : '当前没有先攻列表');
+  });
+  init.subcommand('.list', '查看先攻列表').alias('.show').action(async ({ session }) => {
+    if (!session?.userId) return '无法获取会话信息';
+    return run(session, async (key) => diceAdapter.getInitiativeCount(key) ? diceAdapter.getInitiativeList(key) : '当前没有先攻列表');
+  });
   init.subcommand('.clr', '清空先攻列表').action(async ({ session }) => {
-    if (!session) {
-      return '无法获取会话信息';
-    }
-
-    try {
-      const channelId = session.channelId || session.userId;
-      const platform = session.platform;
-      if (!channelId) {
-        return '无法获取频道或用户信息';
-      }
-
-      if (diceAdapter.clearInitiative(channelId)) {
-        // 删除数据库记录
-        await deleteInitiative(ctx, channelId, platform);
-        return '已清空先攻列表';
-      } else {
-        return '没有要清空的先攻列表';
-      }
-    } catch (error) {
-      logger.error('清空先攻列表错误:', error);
-      return '清空先攻列表时发生错误';
-    }
+    if (!session?.userId) return '无法获取会话信息';
+    return run(session, async (key) => {
+      if (!diceAdapter.clearInitiative(key)) return '没有要清空的先攻列表';
+      await ctx.database.remove('koidice_initiative', { channelId: key, platform: session.platform });
+      return '已清空先攻列表';
+    });
   });
-
-  // .init.del - 移除先攻条目
   init.subcommand('.del <name:text>', '移除先攻条目').action(async ({ session }, name) => {
-    if (!session) {
-      return '无法获取会话信息';
-    }
-
-    if (!name) {
-      return '请指定要移除的名称';
-    }
-
-    try {
-      const channelId = session.channelId || session.userId;
-      const platform = session.platform;
-      if (!channelId) {
-        return '无法获取频道或用户信息';
-      }
-
-      // 加载列表
-      await loadInitiative(ctx, channelId, platform, diceAdapter);
-
-      if (diceAdapter.getInitiativeCount(channelId) === 0) {
-        return '当前没有先攻列表';
-      }
-
-      if (!diceAdapter.removeInitiative(channelId, name)) {
-        return `未找到 ${name}`;
-      }
-
-      const count = diceAdapter.getInitiativeCount(channelId);
-      if (count === 0) {
-        // 删除数据库记录
-        await deleteInitiative(ctx, channelId, platform);
-        return `已移除 ${name}，先攻列表已清空`;
-      }
-
-      // 保存
-      await saveInitiative(ctx, channelId, platform, diceAdapter);
-
-      const list = diceAdapter.getInitiativeList(channelId);
-      return `已移除 ${name}\n\n${list}`;
-    } catch (error) {
-      logger.error('移除先攻条目错误:', error);
-      return '移除先攻条目时发生错误';
-    }
+    if (!session?.userId) return '无法获取会话信息';
+    if (!name) return '请指定要移除的名称';
+    return run(session, async (key) => {
+      if (!diceAdapter.removeInitiative(key, name)) return `未找到 ${name}`;
+      await save(session, key);
+      return `已移除 ${name}\n\n${diceAdapter.getInitiativeList(key)}`;
+    });
   });
-
-  // .init.next - 下一个回合
   init.subcommand('.next', '下一个回合').action(async ({ session }) => {
-    if (!session) {
-      return '无法获取会话信息';
-    }
-
-    try {
-      const channelId = session.channelId || session.userId;
-      const platform = session.platform;
-      if (!channelId) {
-        return '无法获取频道或用户信息';
-      }
-
-      // 加载列表
-      await loadInitiative(ctx, channelId, platform, diceAdapter);
-
-      if (diceAdapter.getInitiativeCount(channelId) === 0) {
-        return '当前没有先攻列表';
-      }
-
-      const result = diceAdapter.nextInitiativeTurn(channelId);
-
-      if (!result.success) {
-        return result.message || '切换回合失败';
-      }
-
-      // 保存
-      await saveInitiative(ctx, channelId, platform, diceAdapter);
-
-      const list = diceAdapter.getInitiativeList(channelId);
-      return `轮到 ${result.currentName} 行动！\n\n${list}`;
-    } catch (error) {
-      logger.error('下一回合错误:', error);
-      return '切换回合时发生错误';
-    }
+    if (!session?.userId) return '无法获取会话信息';
+    return run(session, async (key) => {
+      if (!diceAdapter.getInitiativeCount(key)) return '当前没有先攻列表';
+      const result = diceAdapter.nextInitiativeTurn(key);
+      if (!result.success) return result.message || '切换回合失败';
+      await save(session, key);
+      return `轮到 ${result.currentName} 行动！\n\n${diceAdapter.getInitiativeList(key)}`;
+    });
   });
-
-  // .ri - 先攻掷骰
-  register('ri [...args:text]', '先攻掷骰')
-    .usage('用法: .ri ([加值/表达式]) ([角色名])')
-    .example('.ri - 默认掷1D20')
-    .example('.ri -1 某pc - 带加值的先攻')
-    .example('.ri +5 boss - 带加值的先攻')
-    .example('.ri 2DK - 自定义表达式')
-    .example('.ri 80 怪物甲 - 直接指定先攻值')
+  register('ri [...args:text]', '先攻掷骰').usage('.ri [加值/表达式] [角色名]，支持 .ri+5 3#木乃伊')
     .action(async ({ session }, ...args) => {
-      if (!session) {
-        return '无法获取会话信息';
+      if (!session?.userId) return '无法获取会话信息';
+      let expression = '1d20';
+      let name = session.username || `用户${session.userId}`;
+      const input = args.join(' ').trim();
+      if (input) {
+        const [first, ...rest] = input.split(/\s+/);
+        if (/^[+-][0-9dDkK+\-*/()]+$/.test(first)) { expression += first; name = rest.join(' ') || name; }
+        else if (/^[0-9dDkK+\-*/()]+$/.test(first) && !first.includes('#')) { expression = first; name = rest.join(' ') || name; }
+        else name = input;
       }
-
-      try {
-        const channelId = session.channelId || session.userId;
-        const platform = session.platform;
-        let name = session.username || `用户${session.userId}`;
-        if (!channelId) {
-          return '无法获取频道或用户信息';
+      if (name.length > 200 || expression.length > 200) return '先攻参数过长';
+      let count = 1;
+      const multiple = /^(.*?)#(.*)$/.exec(name);
+      if (multiple) {
+        const countExpr = multiple[1].trim();
+        name = multiple[2].trim();
+        if (!name) return '请指定角色名';
+        if (countExpr) {
+          const rolled = diceAdapter.roll(countExpr, 20);
+          if (rolled.errorCode !== 0) return `掷骰失败: ${rolled.errorMsg}`;
+          count = rolled.total;
         }
-
-        let expression = '1d20'; // 默认表达式
-
-        // 解析参数
-        if (args.length > 0) {
-          const firstArg = args[0];
-          if (!firstArg) {
-            return '请指定有效的先攻参数';
-          }
-
-          // 检查第一个参数是否是数字、加减号开头或骰子表达式
-          if (/^[+-]?\d+$/.test(firstArg)) {
-            // 纯数字或带符号的数字（如 +5, -1, 80）
-            if (firstArg.startsWith('+') || firstArg.startsWith('-')) {
-              // 加值形式
-              expression = `1d20${firstArg}`;
-            } else {
-              // 直接指定先攻值
-              expression = firstArg;
-            }
-            // 第二个参数是角色名
-            if (args.length > 1) {
-              name = args.slice(1).join(' ');
-            }
-          } else if (/^[0-9dDkK+\-*/()\s]+$/.test(firstArg)) {
-            // 骰子表达式（如 2DK, 1d20+5）
-            expression = firstArg;
-            // 第二个参数是角色名
-            if (args.length > 1) {
-              name = args.slice(1).join(' ');
-            }
-          } else {
-            // 第一个参数不是数字也不是表达式，全部作为角色名
-            name = args.join(' ');
-          }
-        }
-
-        // 加载现有列表
-        await loadInitiative(ctx, channelId, platform, diceAdapter);
-
-        // 掷骰或解析数值
-        let initValue: number;
-        let detail: string;
-
-        if (/^\d+$/.test(expression)) {
-          // 纯数字，直接使用
-          initValue = parseInt(expression, 10);
-          detail = `${initValue}`;
-        } else {
-          // 掷骰表达式
-          const rollResult = diceAdapter.roll(expression, 20);
-          if (rollResult.errorCode !== 0) {
-            return `掷骰失败: ${rollResult.errorMsg}`;
-          }
-          initValue = rollResult.total;
-          detail = rollResult.detail;
-        }
-
-        // 添加到先攻列表
-        if (!diceAdapter.addInitiative(channelId, name, initValue)) {
-          return '添加先攻失败';
-        }
-
-        // 保存
-        await saveInitiative(ctx, channelId, platform, diceAdapter);
-
-        const list = diceAdapter.getInitiativeList(channelId);
-        return `${name} 的先攻: ${detail}\n\n${list}`;
-      } catch (error) {
-        logger.error('先攻掷骰错误:', error);
-        return '先攻掷骰时发生错误';
+        if (!Number.isInteger(count) || count < 1 || count > 10) return '先攻数量须为 1-10';
       }
+      const rolls: RollResult[] = [];
+      for (let i = 0; i < count; i++) {
+        const rolled = diceAdapter.roll(expression, 20);
+        if (rolled.errorCode !== 0) return `掷骰失败: ${rolled.errorMsg}`;
+        if (!Number.isSafeInteger(rolled.total) || rolled.total < -2147483648 || rolled.total > 2147483647) return '先攻值超出范围';
+        rolls.push(rolled);
+      }
+      return run(session, async (key) => {
+        for (let i = 0; i < rolls.length; i++) {
+          if (!diceAdapter.addInitiative(key, multiple ? `${name}${i + 1}` : name, rolls[i].total)) return '添加先攻失败';
+        }
+        await save(session, key);
+        return `${name} 的先攻: ${rolls.map((roll) => roll.detail).join('，')}\n\n${diceAdapter.getInitiativeList(key)}`;
+      });
     });
 }
