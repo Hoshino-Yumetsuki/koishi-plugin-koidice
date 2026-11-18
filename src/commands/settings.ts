@@ -2,244 +2,96 @@ import type { Context, Session } from 'koishi';
 import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
-import { logger } from '../index';
+import { CharacterService } from '../services/character-service';
+import { GameSessionService } from '../services/game-session-service';
 
-/**
- * 用户设置（扩展字段）
- */
-interface UserSettingsExt {
-  defaultDice?: number;
-  cocRule?: number;
-  nickname?: string;
+function groupKey(session: Session): string {
+  return `${session.platform}:${session.selfId}:${session.guildId ? session.channelId : `dm:${session.userId}`}`;
 }
 
-/**
- * 加载用户设置
- */
-async function loadSettings(ctx: Context, session: Session): Promise<UserSettingsExt> {
-  try {
-    const { userId, platform } = session;
-    const records = await ctx.database.get('koidice_user_settings', {
-      userId,
-      platform
-    });
-
-    const record = records[0];
-    if (record) {
-      return {
-        defaultDice: record.defaultDice,
-        cocRule: undefined, // COC规则暂时不在数据库中
-        nickname: undefined // 昵称暂时不在数据库中
-      };
-    }
-  } catch (error) {
-    logger.error('加载设置失败:', error);
+export async function getCOCRule(ctx: Context, session: Session): Promise<number> {
+  const game = await new GameSessionService(ctx).getSession(session);
+  if (game) {
+    const configured = JSON.parse(game.config || '{}').rr_rc;
+    const value = configured === undefined || configured === null || configured === '' ? NaN : Number(configured);
+    if (Number.isInteger(value) && value >= 0 && value <= 7) return value;
   }
-  return {};
+  const rows = await ctx.database.get('koidice_group_data', {
+    guildId: groupKey(session), dataKey: 'cocRule'
+  });
+  return rows.length ? Number(rows[0].dataValue) : 0;
 }
 
-/**
- * 保存用户设置
- */
-async function saveSettings(
-  ctx: Context,
-  session: Session,
-  settings: UserSettingsExt
-): Promise<void> {
-  try {
-    const { userId, platform } = session;
-    const existing = await ctx.database.get('koidice_user_settings', {
-      userId,
-      platform
+export async function getDefaultDice(ctx: Context, session: Session, config: Config, diceAdapter: DiceAdapter): Promise<number> {
+  const card = await new CharacterService(ctx, diceAdapter).getActiveCard(session);
+  if (card) {
+    const rows = await ctx.database.get('koidice_user_data', {
+      userId: `${session.platform}:${session.userId}`, dataKey: `defaultDice:${card.id}`
     });
-
-    const now = new Date();
-
-    if (existing.length > 0) {
-      // 更新现有记录
-      await ctx.database.set(
-        'koidice_user_settings',
-        { userId, platform },
-        {
-          defaultDice: settings.defaultDice ?? 100,
-          showDetail: true,
-          updatedAt: now
-        }
-      );
-    } else {
-      // 创建新记录
-      await ctx.database.create('koidice_user_settings', {
-        userId,
-        platform,
-        defaultDice: settings.defaultDice ?? 100,
-        showDetail: true,
-        createdAt: now,
-        updatedAt: now
-      });
-    }
-  } catch (error) {
-    logger.error('保存设置失败:', error);
+    if (rows.length) return Number(rows[0].dataValue);
+    return 100;
   }
+  const rows = await ctx.database.get('koidice_user_settings', {
+    userId: session.userId, platform: session.platform
+  });
+  return rows[0]?.defaultDice ?? config.defaultDice;
 }
 
-/**
- * 设置命令 .set / .setcoc / .nn
- */
-export function registerSettingsCommands(
-  register: RegisterCommand,
-  ctx: Context,
-  _config: Config,
-  _diceAdapter: DiceAdapter
-) {
-  // 设置默认骰
+export function registerSettingsCommands(register: RegisterCommand, ctx: Context, config: Config, diceAdapter: DiceAdapter) {
   register('set [dice:number]', '设置默认骰面数').action(async ({ session }, dice) => {
-    if (!session) {
-      return '无法获取会话信息';
+    if (!session?.userId) return '无法获取会话信息';
+    if (dice !== undefined && (!Number.isInteger(dice) || dice < 1 || dice > Math.min(1000, config.maxDiceFace))) {
+      return `骰子面数必须在 1-${Math.min(1000, config.maxDiceFace)} 之间`;
     }
-
-    try {
-      const settings = await loadSettings(ctx, session);
-
+    const card = await new CharacterService(ctx, diceAdapter).getActiveCard(session);
+    if (card) {
+      const query = { userId: `${session.platform}:${session.userId}`, dataKey: `defaultDice:${card.id}` };
+      const rows = await ctx.database.get('koidice_user_data', query);
       if (dice === undefined) {
-        // 重置为默认值
-        delete settings.defaultDice;
-        await saveSettings(ctx, session, settings);
-        return '已重置默认骰为 D100';
+        if (rows.length) await ctx.database.remove('koidice_user_data', query);
+      } else if (rows.length) {
+        await ctx.database.set('koidice_user_data', query, { dataValue: String(dice), updatedAt: new Date() });
+      } else {
+        await ctx.database.create('koidice_user_data', { ...query, dataValue: String(dice), updatedAt: new Date() });
       }
-
-      if (dice < 2 || dice > 1000) {
-        return '骰子面数必须在 2-1000 之间';
+    } else {
+      const query = { userId: session.userId, platform: session.platform };
+      const rows = await ctx.database.get('koidice_user_settings', query);
+      if (dice === undefined) {
+        if (rows.length) await ctx.database.set('koidice_user_settings', query, { defaultDice: config.defaultDice, updatedAt: new Date() });
+      } else if (rows.length) {
+        await ctx.database.set('koidice_user_settings', query, { defaultDice: dice, updatedAt: new Date() });
+      } else {
+        await ctx.database.create('koidice_user_settings', { ...query, defaultDice: dice, showDetail: true, createdAt: new Date(), updatedAt: new Date() });
       }
-
-      settings.defaultDice = dice;
-      await saveSettings(ctx, session, settings);
-      return `已设置默认骰为 D${dice}`;
-    } catch (error) {
-      logger.error('设置默认骰错误:', error);
-      return '设置失败';
     }
+    return dice === undefined ? `已重置默认骰为 D${card ? 100 : config.defaultDice}` : `已设置默认骰为 D${dice}`;
   });
 
-  // 设置COC房规
-  register('setcoc [rule:number]', '设置COC检定房规')
-    .action(async ({ session }, rule) => {
-      if (!session) {
-        return '无法获取会话信息';
-      }
-
-      try {
-        const settings = await loadSettings(ctx, session);
-
-        if (rule === undefined) {
-          // 显示当前房规
-          const currentRule = settings.cocRule ?? 0;
-          const ruleDesc = [
-            '0: 规则书 - 出1大成功，不满50出96-100大失败，满50出100大失败',
-            '1: 出1大成功，出100大失败',
-            '2: 出1-5且<=成功率大成功，出100或出96-99且>成功率大失败',
-            '3: 出1-5大成功，出96-100大失败',
-            '4: 不满50出1-5且<=成功率大成功，满50出1-2且<=成功率大成功；不满50出96-100大失败，满50出99-100大失败',
-            '5: 出1-5且<=(成功率/10)大成功，出96-100且>(成功率/10)大失败'
-          ];
-          return `当前COC房规: ${currentRule}\n${ruleDesc[currentRule] || '未知房规'}\n\n使用 .setcoc <0-5> 设置房规`;
-        }
-
-        if (rule < 0 || rule > 5) {
-          return 'COC房规必须在 0-5 之间\n0=规则书 1=出1大成功出100大失败 2=困难极难大成功 3=1-5大成功96-100大失败 4=困难极难大成功(满50) 5=困难极难大失败';
-        }
-
-        settings.cocRule = rule;
-        await saveSettings(ctx, session, settings);
-        return `已设置COC房规为 ${rule}`;
-      } catch (error) {
-        logger.error('设置COC房规错误:', error);
-        return '设置失败';
-      }
-    });
-
-  // 设置昵称
-  register('nn [nickname:text]', '设置昵称').action(async ({ session }, nickname) => {
-    if (!session) {
-      return '无法获取会话信息';
+  register('setcoc [rule:text]', '设置COC检定房规').action(async ({ session }, rule) => {
+    if (!session?.userId) return '无法获取会话信息';
+    const query = { guildId: groupKey(session), dataKey: 'cocRule' };
+    if (!rule || rule === 'show') return `当前COC房规: ${await getCOCRule(ctx, session)}`;
+    const games = new GameSessionService(ctx);
+    const game = !session.isDirect && await games.getSession(session);
+    if (!session.isDirect && !(game && games.isGM(game, session.userId))
+        && !session.event.member?.roles?.some(role => role.id === 'owner' || role.id === 'admin')
+        && (await session.observeUser(['authority'])).authority < 4) return '需要桌主或群管理员权限';
+    if (rule !== 'clr' && !/^[0-7]$/.test(rule)) return 'COC房规必须在 0-7 之间';
+    if (game && (rule !== 'clr' || JSON.parse(game.config || '{}').rr_rc !== undefined)) {
+      await games.setConfig(game.id, 'rr_rc', rule === 'clr' ? undefined : Number(rule));
+      return rule === 'clr' ? '已清除本桌COC房规' : `已设置本桌COC房规为 ${rule}`;
     }
-
-    try {
-      const settings = await loadSettings(ctx, session);
-
-      if (!nickname) {
-        // 显示当前昵称
-        if (settings.nickname) {
-          return `当前昵称: ${settings.nickname}`;
-        } else {
-          return `当前昵称: ${session.username || '未设置'}`;
-        }
-      }
-
-      if (nickname === 'del' || nickname === 'clr') {
-        // 删除昵称
-        delete settings.nickname;
-        await saveSettings(ctx, session, settings);
-        return '已删除昵称设置';
-      }
-
-      // 移除前导符号
-      nickname = nickname.replace(/^[.!！。]/, '');
-
-      if (nickname.length > 20) {
-        return '昵称长度不能超过20个字符';
-      }
-
-      settings.nickname = nickname;
-      await saveSettings(ctx, session, settings);
-      return `已设置昵称为: ${nickname}`;
-    } catch (error) {
-      logger.error('设置昵称错误:', error);
-      return '设置失败';
+    if (rule === 'clr') {
+      await ctx.database.remove('koidice_group_data', query);
+      return '已清除COC房规';
     }
+    const rows = await ctx.database.get('koidice_group_data', query);
+    if (rows.length) {
+      await ctx.database.set('koidice_group_data', query, { dataValue: rule, updatedAt: new Date() });
+    } else {
+      await ctx.database.create('koidice_group_data', { ...query, dataValue: rule, updatedAt: new Date() });
+    }
+    return `已设置COC房规为 ${rule}`;
   });
-}
-
-/**
- * 获取用户默认骰
- */
-export async function getUserDefaultDice(
-  ctx: Context,
-  userId: string,
-  platform: string
-): Promise<number> {
-  try {
-    const records = await ctx.database.get('koidice_user_settings', {
-      userId,
-      platform
-    });
-    return records[0]?.defaultDice ?? 100;
-  } catch (error) {
-    logger.error('获取用户默认骰失败:', error);
-  }
-  return 100;
-}
-
-/**
- * 获取用户COC房规
- */
-export async function getUserCOCRule(
-  _ctx: Context,
-  _userId: string,
-  _platform: string
-): Promise<number> {
-  // COC房规暂时不在数据库中，返回默认值
-  return 0;
-}
-
-/**
- * 获取用户昵称
- */
-export async function getUserNickname(
-  _ctx: Context,
-  _userId: string,
-  _platform: string,
-  defaultName: string
-): Promise<string> {
-  // 昵称暂时不在数据库中，返回默认值
-  return defaultName;
 }

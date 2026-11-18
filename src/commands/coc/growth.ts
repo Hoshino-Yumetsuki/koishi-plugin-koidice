@@ -4,6 +4,8 @@ import type { Config } from '../../config';
 import type { DiceAdapter } from '../../wasm';
 import { logger } from '../../index';
 import { CharacterService } from '../../services/character-service';
+import { GameSessionService } from '../../services/game-session-service';
+import { recordDiceStatistics } from '../../services/character/card-stats';
 
 /**
  * 解析成长检定参数
@@ -21,44 +23,17 @@ interface ParsedGrowthArgs {
 }
 
 function parseGrowthCommand(args: string[]): ParsedGrowthArgs | null {
-  const [skillName] = args;
-  if (!skillName) {
-    return null;
+  if (!args[0]) return null;
+  const match = args[0].match(/^([^\d]+)(\d+)?$/);
+  if (!match) return null;
+  const result: ParsedGrowthArgs = { skillName: match[1] };
+  let index = 1;
+  if (match[2]) result.skillValue = Number(match[2]);
+  else if (args[index] && /^\d+$/.test(args[index])) result.skillValue = Number(args[index++]);
+  if (args[index] && /^[+-][\ddD+*()\-]+(?:\/[+-]?[\ddD+*()\-]+)?$/.test(args[index])) {
+    result.growthFormula = args[index++];
   }
-
-  const result: ParsedGrowthArgs = { skillName };
-
-  if (args.length === 1) {
-    // 只有技能名
-    return result;
-  }
-
-  const secondArg = args[1];
-  if (secondArg === undefined) {
-    return result;
-  }
-
-  // 检查是否是Pulp规则的成长公式（如 +1D3/1D10）
-  if (secondArg.match(/^\+\d*[dD]\d+\/\d*[dD]\d+$/)) {
-    result.growthFormula = secondArg;
-    if (args.length > 2) {
-      result.reason = args.slice(2).join(' ');
-    }
-    return result;
-  }
-
-  // 尝试解析为数字
-  const skillValueNum = parseFloat(secondArg);
-  if (!Number.isNaN(skillValueNum)) {
-    result.skillValue = skillValueNum;
-    if (args.length > 2) {
-      result.reason = args.slice(2).join(' ');
-    }
-    return result;
-  }
-
-  // 第二个参数不是数字也不是成长公式，作为原因
-  result.reason = args.slice(1).join(' ');
+  result.reason = args.slice(index).join(' ');
   return result;
 }
 
@@ -83,7 +58,8 @@ export function registerGrowthCommand(
     .example('.en 教育 60 - 对教育60进行成长检定')
     .example('.en 教育 60 教育增强 - 带原因的成长检定')
     .example('.en 幸运 +1D3/1D10 幸运成长 - Pulp规则的特殊成长')
-    .action(async ({ session }, ...args) => {
+    .action(async ({ session }, ...rawArgs) => {
+      const args = rawArgs.join(' ').trim().split(/\s+/);
       if (!session) {
         return '无法获取会话信息';
       }
@@ -99,64 +75,36 @@ export function registerGrowthCommand(
 
         // 如果没有指定技能值，从人物卡获取
         if (currentValue === undefined) {
-          const attributes = await characterService.getAttributes(session, null);
-          if (!attributes || !(parsed.skillName in attributes)) {
-            return `未找到技能 ${parsed.skillName}，请指定技能值或先使用 .st.set ${parsed.skillName} <值> 设置`;
+          const value = await characterService.getAttribute(session, parsed.skillName);
+          if (value === null) {
+            return `未找到技能 ${parsed.skillName}，请指定技能值或先使用 .st ${parsed.skillName} <值> 设置`;
           }
-          currentValue = attributes[parsed.skillName];
+          currentValue = value;
           shouldUpdateCard = true;
         }
 
-        // 处理Pulp规则的特殊成长
-        if (parsed.growthFormula) {
-          // 解析公式，如 +1D3/1D10
-          const match = parsed.growthFormula.match(/^\+(\d*[dD]\d+)\/(\d*[dD]\d+)$/);
-          if (!match) {
-            return '成长公式格式错误，应为 +XdY/XdY 格式';
-          }
-
-          const successGrowth = match[1];
-          if (!successGrowth) {
-            return '成长公式格式错误，应为 +XdY/XdY 格式';
-          }
-
-          // 掷成长骰
-          const growthRoll = diceAdapter.roll(successGrowth, 100);
-          if (growthRoll.errorCode !== 0) {
-            return `成长掷骰失败: ${growthRoll.errorMsg}`;
-          }
-
-          const newValue = currentValue + growthRoll.total;
-
-          // 更新人物卡
-          if (shouldUpdateCard) {
-            await characterService.setAttributes(session, null, {
-              [parsed.skillName]: newValue
-            });
-          }
-
-          const parts = [session.username];
-          if (parsed.reason) {
-            parts.push(parsed.reason);
-          }
-          parts.push(`${parsed.skillName} ${currentValue} + ${growthRoll.detail} = ${newValue}`);
-
-          return parts.join(' ');
-        }
 
         // 标准成长检定：掷1D100，大于当前值则成长1D10
-        const checkRoll = diceAdapter.roll('1d100', 100);
+        const roulette = await new GameSessionService(ctx).drawRoulette(session, 100, diceAdapter);
+        const checkRoll = roulette === undefined ? diceAdapter.roll('1d100', 100) : { total: roulette, detail: `1D100=${roulette}`, errorCode: 0, errorMsg: '' };
         if (checkRoll.errorCode !== 0) {
           return `检定掷骰失败: ${checkRoll.errorMsg}`;
+        }
+        const card = await characterService.getActiveCard(session);
+        if (card) {
+          await characterService.updateStats(session, card.cardName, { totalRolls: 1 });
+          await recordDiceStatistics(ctx, session, card.cardName, card.id, 100, [checkRoll.total]);
         }
 
         let newValue = currentValue;
         let growthAmount = 0;
         let growthDetail = '';
 
-        if (checkRoll.total > currentValue) {
-          // 成长成功
-          const growthRoll = diceAdapter.roll('1d10', 10);
+        const succeeded = checkRoll.total > currentValue || checkRoll.total > 95;
+        const formulas = parsed.growthFormula?.split('/') ?? ['1d10'];
+        const formula = succeeded ? formulas[formulas.length - 1] : formulas.length > 1 ? formulas[0] : undefined;
+        if (formula) {
+          const growthRoll = diceAdapter.roll(formula, 100);
           if (growthRoll.errorCode !== 0) {
             return `成长掷骰失败: ${growthRoll.errorMsg}`;
           }
@@ -179,9 +127,9 @@ export function registerGrowthCommand(
           parts.push(parsed.reason);
         }
 
-        if (growthAmount > 0) {
+        if (formula) {
           parts.push(
-            `${parsed.skillName} ${checkRoll.detail}/${currentValue} 成长成功 +${growthDetail} → ${newValue}`
+            `${parsed.skillName} ${checkRoll.detail}/${currentValue} 成长${succeeded ? '成功' : '失败'} ${growthDetail} → ${newValue}`
           );
         } else {
           parts.push(`${parsed.skillName} ${checkRoll.detail}/${currentValue} 成长失败`);
