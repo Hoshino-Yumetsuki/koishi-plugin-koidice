@@ -64,7 +64,9 @@ export function registerInitiativeCommands(register: RegisterCommand, ctx: Conte
       return `轮到 ${result.currentName} 行动！\n\n${diceAdapter.getInitiativeList(key)}`;
     });
   });
-  register('ri [...args:text]', '先攻掷骰').usage('.ri [加值/表达式] [角色名]，支持 .ri+5 3#木乃伊')
+  const ri = register('ri [...args:text]', '先攻掷骰');
+  ri.config.strictOptions = true;
+  ri.usage('.ri [加值/表达式] [角色名]，支持 .ri -1 某pc、.ri+5 3#木乃伊')
     .action(async ({ session }, ...args) => {
       if (!session?.userId) return '无法获取会话信息';
       let expression = '1d20';
