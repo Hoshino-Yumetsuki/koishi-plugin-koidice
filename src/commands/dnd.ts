@@ -15,7 +15,7 @@ export function registerDNDGeneratorCommand(
 
     // 限制生成数量
     const maxCount = 10;
-    if (count < 1 || count > maxCount) {
+    if (!Number.isInteger(count) || count < 1 || count > maxCount) {
       return `生成数量必须在1-${maxCount}之间`;
     }
 
