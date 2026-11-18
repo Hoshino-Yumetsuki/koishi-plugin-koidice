@@ -23,8 +23,8 @@
     "lib"
   ],
   "scripts": {
-    "build:wasm": "powershell -Command \"New-Item -ItemType Directory -Force -Path wasm/build | Out-Null; Set-Location wasm/build; emcmake cmake .. -DCMAKE_BUILD_TYPE=Release; cmake --build . --parallel\"",
-    "build:wasm:debug": "powershell -Command \"New-Item -ItemType Directory -Force -Path wasm/build | Out-Null; Set-Location wasm/build; emcmake cmake .. -DCMAKE_BUILD_TYPE=Debug; cmake --build .\"",
+    "build:wasm": "emcmake cmake -S wasm -B wasm/build -U CMAKE_MAKE_PROGRAM -DCMAKE_BUILD_TYPE=Release && cmake --build wasm/build --parallel",
+    "build:wasm:debug": "emcmake cmake -S wasm -B wasm/build -U CMAKE_MAKE_PROGRAM -DCMAKE_BUILD_TYPE=Debug && cmake --build wasm/build",
     "build:ts": "tsdown",
     "build": "yarn build:wasm && yarn build:ts",
     "test:koishi": "node --test test/*.cjs",
