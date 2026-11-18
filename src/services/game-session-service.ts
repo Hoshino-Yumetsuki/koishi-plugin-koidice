@@ -1,6 +1,18 @@
 import type { Context, Session } from 'koishi';
 import type { GameSession } from '../database';
 import { logger } from '../index';
+import type { CommandResult } from '../wasm/types';
+import type { DiceAdapter } from '../wasm/adapter';
+
+const rouletteQueues = new Map<number, Promise<unknown>>();
+
+async function withRouletteLock<T>(id: number, action: () => Promise<T>): Promise<T> {
+  const result = (rouletteQueues.get(id) || Promise.resolve()).catch(() => undefined).then(action);
+  rouletteQueues.set(id, result);
+  try { return await result; } finally {
+    if (rouletteQueues.get(id) === result) rouletteQueues.delete(id);
+  }
+}
 
 /**
  * 游戏会话服务
@@ -11,6 +23,19 @@ export class GameSessionService {
 
   constructor(private ctx: Context) {}
 
+  async roll(session: Session, evaluate: (roulette: string) => CommandResult): Promise<CommandResult> {
+    const game = await this.getSession(session);
+    if (!game?.roulette || game.roulette === '{}' || !session.userId || !this.isParticipant(game, session.userId)) return evaluate('');
+    return withRouletteLock(game.id, async () => {
+      const [latest] = await this.ctx.database.get('koidice_game_session', { id: game.id });
+      const result = evaluate(latest?.roulette || '');
+      if (result.success && result.roulette) await this.ctx.database.set('koidice_game_session', { id: game.id }, {
+        roulette: result.roulette, updatedAt: new Date()
+      });
+      return result;
+    });
+  }
+
   /**
    * 获取会话标识
    */
@@ -18,7 +43,8 @@ export class GameSessionService {
     guildId: string;
     platform: string;
   } {
-    const guildId = session.guildId || session.channelId || session.userId;
+    const id = session.channelId || session.guildId || session.userId;
+    const guildId = id && JSON.stringify([session.selfId, session.isDirect ? 'direct' : 'channel', id]);
     if (!guildId) throw new Error('无法获取会话信息');
 
     return {
@@ -48,6 +74,20 @@ export class GameSessionService {
     return null;
   }
 
+  async getSessionByChannel(platform: string, channelId: string, selfId: string, isDirect = false): Promise<GameSession | null> {
+    const area = JSON.stringify([selfId, isDirect ? 'direct' : 'channel', channelId]);
+    const sessions = await this.ctx.database.get('koidice_game_session', { platform });
+    return sessions.find((game) => JSON.parse(game.areas || '[]').includes(area)) || null;
+  }
+
+  async getOrCreateForArea(session: Session): Promise<GameSession> {
+    return (await this.getSession(session)) || this.createSession(session);
+  }
+
+  areaKey(session: Session): string {
+    return this.getSessionKey(session).guildId;
+  }
+
   /**
    * 根据名称获取游戏会话
    */
@@ -64,11 +104,14 @@ export class GameSessionService {
    */
   async createSession(session: Session, name?: string): Promise<GameSession> {
     const { guildId, platform } = this.getSessionKey(session);
+    if (await this.getSession(session)) throw new Error('当前窗口已有游戏');
 
     // 生成游戏名称
     if (!name) {
-      this.sessionCounter++;
-      name = `新游戏#${this.sessionCounter}`;
+      do {
+        this.sessionCounter++;
+        name = `新游戏#${this.sessionCounter}`;
+      } while (await this.getSessionByName(name, platform));
     }
 
     // 检查是否已存在同名游戏
@@ -86,8 +129,11 @@ export class GameSessionService {
       playerList: JSON.stringify([]),
       observerList: JSON.stringify([]),
       areas: JSON.stringify([guildId]),
-      config: JSON.stringify({}),
-      roulette: JSON.stringify({}),
+      config: JSON.stringify({ rule: 'COC7' }),
+      roulette: '{}',
+      logName: '',
+      logEntries: '[]',
+      logParticipants: '[]',
       isLogging: false,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -305,14 +351,15 @@ export class GameSessionService {
   /**
    * 设置游戏配置
    */
-  async setConfig(gameId: number, key: string, value: any): Promise<void> {
+  async setConfig(gameId: number, key: string, value: unknown): Promise<void> {
     const [game] = await this.ctx.database.get('koidice_game_session', {
       id: gameId
     });
     if (!game) return;
 
     const config = JSON.parse(game.config || '{}');
-    config[key] = value;
+    if (value === undefined) delete config[key];
+    else config[key] = value;
 
     await this.ctx.database.set(
       'koidice_game_session',
@@ -341,6 +388,7 @@ export class GameSessionService {
    * 设置轮盘骰
    */
   async setRoulette(gameId: number, face: number, data: any): Promise<void> {
+    return withRouletteLock(gameId, async () => {
     const [game] = await this.ctx.database.get('koidice_game_session', {
       id: gameId
     });
@@ -357,6 +405,7 @@ export class GameSessionService {
         updatedAt: new Date()
       }
     );
+    });
   }
 
   /**
@@ -376,6 +425,7 @@ export class GameSessionService {
    * 清空轮盘骰
    */
   async clearRoulette(gameId: number): Promise<void> {
+    return withRouletteLock(gameId, async () => {
     await this.ctx.database.set(
       'koidice_game_session',
       { id: gameId },
@@ -384,6 +434,37 @@ export class GameSessionService {
         updatedAt: new Date()
       }
     );
+    });
+  }
+
+  async resetRoulette(gameId: number): Promise<void> {
+    return withRouletteLock(gameId, async () => {
+    const [game] = await this.ctx.database.get('koidice_game_session', { id: gameId });
+    if (!game) return;
+    const roulette = JSON.parse(game.roulette || '{}');
+    for (const data of Object.values(roulette) as { pool: number[]; sizRes: number }[]) data.sizRes = data.pool.length;
+    await this.ctx.database.set('koidice_game_session', { id: gameId }, {
+      roulette: JSON.stringify(roulette), updatedAt: new Date()
+    });
+    });
+  }
+
+  async drawRoulette(session: Session, face: number, adapter: Pick<DiceAdapter, 'drawRouletteBatch'>): Promise<number | undefined> {
+    return (await this.drawRouletteBatch(session, [face], adapter))[0];
+  }
+
+  async drawRouletteBatch(session: Session, faces: number[], adapter: Pick<DiceAdapter, 'drawRouletteBatch'>): Promise<(number | undefined)[]> {
+    const game = await this.getSession(session);
+    if (!game?.roulette || game.roulette === '{}' || !session.userId || !this.isParticipant(game, session.userId)) return faces.map(() => undefined);
+    return withRouletteLock(game.id, async () => {
+      const [latest] = await this.ctx.database.get('koidice_game_session', { id: game.id });
+      if (!latest?.roulette || latest.roulette === '{}') return faces.map(() => undefined);
+      const result = adapter.drawRouletteBatch(latest.roulette, faces);
+      if (result.roulette) await this.ctx.database.set('koidice_game_session', { id: game.id }, {
+        roulette: result.roulette, updatedAt: new Date()
+      });
+      return result.rolls;
+    });
   }
 
   /**

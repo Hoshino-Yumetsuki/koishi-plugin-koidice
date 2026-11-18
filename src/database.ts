@@ -131,6 +131,9 @@ export interface GameSession {
   config: string; // 游戏配置（JSON对象）
   roulette: string; // 轮盘骰数据（JSON对象）
   isLogging: boolean; // 是否记录日志
+  logName: string;
+  logEntries: string;
+  logParticipants: string;
   createdAt: Date; // 创建时间
   updatedAt: Date; // 更新时间
 }
@@ -347,6 +350,9 @@ export function extendDatabase(ctx: Context) {
       config: 'text',
       roulette: 'text',
       isLogging: 'boolean',
+      logName: 'string',
+      logEntries: { type: 'text', initial: '[]' },
+      logParticipants: { type: 'text', initial: '[]' },
       createdAt: 'timestamp',
       updatedAt: 'timestamp'
     },

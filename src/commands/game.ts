@@ -1,14 +1,20 @@
-import type { Context } from 'koishi';
+import type { Context, Session } from 'koishi';
 import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import { logger } from '../index';
 import { GameSessionService } from '../services/game-session-service';
+import { registerGameLog } from './game-log';
+
+function isGroupAdmin(session: Session): boolean {
+  return !!session.guildId && !!session.event.member?.roles?.some((role) => role.id === 'admin' || role.id === 'owner');
+}
 
 /**
  * 游戏会话命令 .game
  */
 export function registerGameCommands(register: RegisterCommand, ctx: Context, _config: Config) {
   const gameService = new GameSessionService(ctx);
+  registerGameLog(register, ctx, gameService);
 
   const cmd = register('game', '游戏会话管理').usage('管理 TRPG 游戏会话');
 
@@ -83,7 +89,7 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
       if (config.rule) {
         lines.push(`规则: ${config.rule}`);
       }
-      if (config.rr_rc) {
+      if (config.rr_rc != null) {
         lines.push(`检定房规: ${config.rr_rc}`);
       }
 
@@ -100,10 +106,7 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
       return '无法获取用户会话信息';
     }
     try {
-      const game = await gameService.getSession(session);
-      if (!game) {
-        return '当前窗口没有进行中的游戏';
-      }
+      const game = await gameService.getOrCreateForArea(session);
 
       const gmList = JSON.parse(game.gmList || '[]');
 
@@ -112,11 +115,7 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
         return '你已经是 GM 了';
       }
 
-      // 如果已有 GM，需要群管理权限
-      if (gmList.length > 0) {
-        // TODO: 检查群管理权限
-        // 暂时允许
-      }
+      if (gmList.length > 0 && !isGroupAdmin(session)) return '只有群管理员可以登记为 GM';
 
       await gameService.addGM(game.id, session.userId);
       return '你已成为 GM';
@@ -257,14 +256,15 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
           return '请指定配置项';
         }
 
-        if (value === undefined) {
-          // 查看配置
-          const val = await gameService.getConfig(game.id, key);
-          return `${key} = ${val !== undefined ? val : '(未设置)'}`;
+        const [item, inlineValue] = key.split(/=(.*)/s, 2);
+        if (!item || !/^[\w.-]+$/.test(item) || ['__proto__', 'prototype', 'constructor'].includes(item)) return '无效的配置项';
+        const setting = inlineValue || value;
+        if (setting === undefined) {
+          const val = await gameService.getConfig(game.id, item);
+          return `${item} = ${val !== undefined ? val : '(未设置)'}`;
         } else {
-          // 设置配置
-          await gameService.setConfig(game.id, key, value);
-          return `已设置 ${key} = ${value}`;
+          await gameService.setConfig(game.id, item, setting === 'clr' ? undefined : setting);
+          return setting === 'clr' ? `已清除 ${item}` : `已设置 ${item} = ${setting}`;
         }
       } catch (error) {
         logger.error('设置游戏配置失败:', error);
@@ -288,15 +288,21 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
         if (!game) {
           return `游戏「${gameName}」不存在`;
         }
+        let ownerBot: unknown;
+        try { ownerBot = JSON.parse(game.guildId)[0]; } catch { return '游戏不属于当前机器人'; }
+        if (ownerBot !== session.selfId) return '游戏不属于当前机器人';
 
         if (
           !gameService.isGM(game, session.userId) &&
-          !gameService.isPlayer(game, session.userId)
+          !(session.isDirect && gameService.isPlayer(game, session.userId))
         ) {
           return '只有 GM 或玩家可以打开游戏窗口';
         }
+        if (!session.isDirect && !isGroupAdmin(session)) return '群聊中打开游戏需要群管理员权限';
+        const current = await gameService.getSession(session);
+        if (current && current.id !== game.id) return `当前窗口已有游戏「${current.name}」`;
 
-        const guildId = session.guildId || session.channelId || session.userId;
+        const guildId = gameService.areaKey(session);
         await gameService.addArea(game.id, guildId);
         return `当前窗口已加入游戏「${game.name}」`;
       } catch (error) {
@@ -316,11 +322,11 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
         return '当前窗口没有进行中的游戏';
       }
 
-      if (!gameService.isGM(game, session.userId)) {
+      if (!gameService.isGM(game, session.userId) && !isGroupAdmin(session)) {
         return '只有 GM 可以关闭游戏窗口';
       }
 
-      const guildId = session.guildId || session.channelId || session.userId;
+      const guildId = gameService.areaKey(session);
       await gameService.removeArea(game.id, guildId);
       return `已将当前窗口从游戏「${game.name}」移除`;
     } catch (error) {
@@ -340,10 +346,11 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
         return '当前窗口没有进行中的游戏';
       }
 
-      if (!gameService.isGM(game, session.userId)) {
+      if (!gameService.isGM(game, session.userId) && !isGroupAdmin(session)) {
         return '只有 GM 可以销毁游戏';
       }
 
+      if (game.logName) return '请先使用 .log end 保存日志，再结束游戏';
       const gameName = game.name;
       await gameService.destroySession(game.id);
       return `游戏「${gameName}」已结束`;
@@ -387,9 +394,8 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
 
           const lines = ['轮盘骰历史:'];
           for (const [face, data] of Object.entries(roulette)) {
-            const { pool, copy } = data as any;
-            const total = pool.length;
-            lines.push(`D${face}: 剩余 ${total}/${parseInt(face, 10) * (copy || 1)} 个`);
+            const { pool, sizRes } = data as { pool: number[]; sizRes: number };
+            lines.push(`D${face}: ${pool.slice(sizRes).reverse().join(' ') || '无记录'}`);
           }
           return lines.join('\n');
         }
@@ -401,7 +407,7 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
 
         // 重置
         if (action === 'reset') {
-          // TODO: 实现重置逻辑
+          await gameService.resetRoulette(game.id);
           return '轮盘骰已重置';
         }
 
@@ -425,7 +431,7 @@ export function registerGameCommands(register: RegisterCommand, ctx: Context, _c
             return '骰子面数必须在 2-100 之间';
           }
 
-          if (face * copy > 100) {
+          if (copy < 1 || !Number.isSafeInteger(copy) || face * copy > 100) {
             return '总数不能超过 100';
           }
 
