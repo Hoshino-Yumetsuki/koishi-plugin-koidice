@@ -42,23 +42,6 @@ export function registerStShowCommand(register: RegisterCommand, ctx: Context, d
           return `${session.username} 的属性:\n${attrLines}`;
         }
 
-        // 特殊处理：如果只有一个参数且不包含 --，当作人物卡名称
-        const trimmedArgs = args.trim();
-        if (!trimmedArgs.includes('--') && !trimmedArgs.includes(' ')) {
-          const cardName = trimmedArgs;
-          const attrs = await characterService.getAttributes(session, cardName);
-
-          if (!attrs || Object.keys(attrs).length === 0) {
-            return `人物卡 ${cardName} 还没有任何属性`;
-          }
-
-          const attrLines = Object.entries(attrs)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, value]) => `${key}: ${value}`)
-            .join('\n');
-
-          return `人物卡 ${cardName} 的属性:\n${attrLines}`;
-        }
 
         // 解析参数
         const { cardName, attributes } = parseAttributeList(args, diceAdapter);

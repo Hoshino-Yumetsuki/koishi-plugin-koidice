@@ -2,6 +2,7 @@ import type { Context } from 'koishi';
 import type { RegisterCommand } from '../command-scope';
 import type { DiceAdapter } from '../wasm';
 import type { ExtensionService } from '../services/extension-service';
+import type { Config } from '../config';
 
 import { registerCharacterCommands } from './character/index';
 
@@ -16,7 +17,8 @@ export function registerAttributeCharacterCommands(
   register: RegisterCommand,
   ctx: Context,
   diceAdapter: DiceAdapter,
-  extensionService?: ExtensionService
+  extensionService?: ExtensionService,
+  config?: Config
 ) {
-  registerCharacterCommands(register, ctx, diceAdapter, extensionService);
+  registerCharacterCommands(register, ctx, diceAdapter, extensionService, config);
 }

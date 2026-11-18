@@ -18,11 +18,38 @@ export function getUserKey(session: Session): {
   };
 }
 
+const pendingUpdates = new WeakMap<Context, Map<string, Promise<void>>>();
+
+export async function serializeCharacterUpdate<T>(ctx: Context, session: Session, operation: () => Promise<T>): Promise<T> {
+  const { platform, userId } = getUserKey(session);
+  let pending = pendingUpdates.get(ctx);
+  if (!pending) pendingUpdates.set(ctx, pending = new Map());
+  const key = JSON.stringify([platform, userId]);
+  const previous = pending.get(key) ?? Promise.resolve();
+  const result = previous.then(operation);
+  const next = result.then(() => undefined, () => undefined);
+  pending.set(key, next);
+  try {
+    return await result;
+  } finally {
+    if (pending.get(key) === next) pending.delete(key);
+  }
+}
+
 /**
  * 获取用户当前激活的人物卡
  */
 export async function getActiveCard(ctx: Context, session: Session): Promise<CharacterCard | null> {
   const { userId, platform } = getUserKey(session);
+  if (session.guildId) {
+    const bindings = await ctx.database.get('koidice_character_binding', {
+      userId, platform, guildId: session.guildId
+    });
+    if (bindings.length) {
+      const bound = await getCard(ctx, session, bindings[0].cardName);
+      if (bound) return bound;
+    }
+  }
   const cards = await ctx.database.get('koidice_character', {
     userId,
     platform,
@@ -102,34 +129,33 @@ export async function setAttributes(
   ctx: Context,
   session: Session,
   cardName: string | null,
-  attributes: Record<string, number>
+  attributes: Record<string, number | string>
 ): Promise<void> {
-  const { userId, platform } = getUserKey(session);
+  await mutateAttributes(ctx, session, cardName, (current) => ({ ...current, ...attributes }));
+}
 
-  // 如果未指定卡名，使用当前激活的卡
-  let targetCard: CharacterCard | null;
-  if (cardName) {
-    targetCard = await getCard(ctx, session, cardName);
-  } else {
-    targetCard = await getActiveCard(ctx, session);
-  }
-
-  if (!targetCard) {
-    throw new Error('未找到人物卡');
-  }
-
-  // 合并属性
-  const currentAttrs =
-    typeof targetCard.attributes === 'string'
-      ? JSON.parse(targetCard.attributes)
-      : targetCard.attributes;
-  const newAttrs = { ...currentAttrs, ...attributes };
-
-  await ctx.database.set(
-    'koidice_character',
-    { userId, platform, cardName: targetCard.cardName },
-    { attributes: JSON.stringify(newAttrs), updatedAt: new Date() }
-  );
+export async function mutateAttributes(
+  ctx: Context,
+  session: Session,
+  cardName: string | null,
+  update: (current: Record<string, number | string>) => Record<string, number | string>
+): Promise<void> {
+  await serializeCharacterUpdate(ctx, session, async () => {
+    const { userId, platform } = getUserKey(session);
+    let targetCard = cardName ? await getCard(ctx, session, cardName) : await getActiveCard(ctx, session);
+    if (!targetCard && cardName) throw new Error('未找到人物卡');
+    const current = targetCard
+      ? (typeof targetCard.attributes === 'string' ? JSON.parse(targetCard.attributes) : targetCard.attributes)
+      : {};
+    const attributes = update({ ...current });
+    if (!targetCard) {
+      await createCard(ctx, session, 'default', 'COC7', attributes as Record<string, number>);
+      return;
+    }
+    await ctx.database.set('koidice_character',
+      { userId, platform, cardName: targetCard.cardName },
+      { attributes: JSON.stringify(attributes), updatedAt: new Date() });
+  });
 }
 
 /**
@@ -145,6 +171,12 @@ export async function getAttributes(
   if (!card) return null;
 
   return typeof card.attributes === 'string' ? JSON.parse(card.attributes) : card.attributes;
+}
+
+export async function getExpression(ctx: Context, session: Session, name: string): Promise<string | null> {
+  const attributes = await getAttributes(ctx, session, null);
+  const value: unknown = attributes?.[name];
+  return typeof value === 'string' ? value : null;
 }
 
 /**
@@ -174,6 +206,7 @@ export async function deleteCard(
   session: Session,
   cardName: string
 ): Promise<boolean> {
+  return serializeCharacterUpdate(ctx, session, async () => {
   const card = await getCard(ctx, session, cardName);
   if (!card) return false;
 
@@ -192,8 +225,14 @@ export async function deleteCard(
     platform,
     cardName
   });
+  await ctx.database.remove('koidice_character_stats', { userId, platform, cardName });
+  if (card.isActive) {
+    const remaining = await getAllCards(ctx, session);
+    if (remaining.length) await switchCard(ctx, session, remaining[0].cardName);
+  }
 
   return true;
+  });
 }
 
 /**
@@ -227,6 +266,7 @@ export async function renameCard(
   oldName: string,
   newName: string
 ): Promise<void> {
+  return serializeCharacterUpdate(ctx, session, async () => {
   const { userId, platform } = getUserKey(session);
 
   // 检查旧卡是否存在
@@ -254,6 +294,9 @@ export async function renameCard(
     { userId, platform, cardName: oldName },
     { cardName: newName }
   );
+  await ctx.database.set('koidice_character_stats',
+    { userId, platform, cardName: oldName }, { cardName: newName });
+  });
 }
 
 /**
@@ -273,11 +316,15 @@ export async function copyCard(
     throw new Error(`人物卡 "${sourceName}" 不存在`);
   }
 
-  // 检查目标名称是否已存在
   const targetCard = await getCard(ctx, session, targetName);
   if (targetCard) {
-    throw new Error(`人物卡 "${targetName}" 已存在`);
+    await ctx.database.set('koidice_character', { userId, platform, cardName: targetName }, {
+      attributes: sourceCard.attributes,
+      updatedAt: new Date()
+    });
+    return { ...targetCard, attributes: sourceCard.attributes };
   }
+  if ((await getAllCards(ctx, session)).length >= 16) throw new Error('人物卡数量已达上限（16张）');
 
   // 创建新卡
   const newCard = await ctx.database.create('koidice_character', {
@@ -298,6 +345,7 @@ export async function copyCard(
  * 清空所有人物卡
  */
 export async function clearAllCards(ctx: Context, session: Session): Promise<number> {
+  return serializeCharacterUpdate(ctx, session, async () => {
   const { userId, platform } = getUserKey(session);
 
   // 删除所有卡
@@ -320,4 +368,5 @@ export async function clearAllCards(ctx: Context, session: Session): Promise<num
   });
 
   return cards.length;
+  });
 }

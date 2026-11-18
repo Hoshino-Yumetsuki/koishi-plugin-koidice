@@ -6,6 +6,7 @@ import type { Context } from 'koishi';
 import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import type { ExtensionService } from '../../services/extension-service';
+import type { Config } from '../../config';
 import { registerPcNewCommand } from './pc-new';
 import { registerPcTagCommand } from './pc-tag';
 import { registerPcShowCommand } from './pc-show';
@@ -18,6 +19,7 @@ import { registerPcBuildCommand } from './pc-build';
 import { registerPcRedoCommand } from './pc-redo';
 import { registerPcClrCommand } from './pc-clr';
 import { registerPcStatCommand } from './pc-stat';
+import { registerPcTemplateCommands } from './pc-template';
 
 /**
  * 注册所有.pc命令
@@ -26,10 +28,11 @@ export function registerPcCommands(
   register: RegisterCommand,
   ctx: Context,
   diceAdapter: DiceAdapter,
-  extensionService?: ExtensionService
+  extensionService?: ExtensionService,
+  config?: Config
 ) {
   // 注册子命令到parent
-  registerPcNewCommand(register, ctx, diceAdapter, extensionService);
+  registerPcNewCommand(register, ctx, diceAdapter, extensionService, config);
   registerPcTagCommand(register, ctx, diceAdapter);
   registerPcShowCommand(register, ctx, diceAdapter);
   registerPcNnCommand(register, ctx, diceAdapter);
@@ -37,8 +40,9 @@ export function registerPcCommands(
   registerPcDelCommand(register, ctx, diceAdapter);
   registerPcListCommand(register, ctx, diceAdapter);
   registerPcGrpCommand(register, ctx, diceAdapter);
-  registerPcBuildCommand(register, ctx, diceAdapter);
-  registerPcRedoCommand(register, ctx, diceAdapter);
+  registerPcBuildCommand(register, ctx, diceAdapter, config, extensionService);
+  registerPcRedoCommand(register, ctx, diceAdapter, config, extensionService);
   registerPcClrCommand(register, ctx, diceAdapter);
   registerPcStatCommand(register, ctx, diceAdapter);
+  registerPcTemplateCommands(register, ctx, diceAdapter, extensionService);
 }

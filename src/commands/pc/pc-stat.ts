@@ -38,10 +38,31 @@ export function registerPcStatCommand(register: RegisterCommand, ctx: Context, d
           targetName = boundCard.cardName;
         }
 
+        const card = await characterService.getCard(session, targetName);
         const stats = await characterService.getStats(session, targetName);
-
+        const attrs = JSON.parse(stats?.nativeCounters || '{}') as Record<string, number>;
+        const settings = await ctx.database.get('koidice_user_data', {
+          userId: `${session.platform}:${session.userId}`, dataKey: `defaultDice:${card!.id}`
+        });
+        const face = settings.length ? Number(settings[0].dataValue) : 100;
+        const count = Number(attrs[`__StatD${face}Cnt`]) || 0;
+        const checks = Number(attrs.__StatRcCnt) || 0;
+        const native: string[] = [];
+        if (face <= 100 && count > 0) {
+          const mean = (Number(attrs[`__StatD${face}Sum`]) || 0) / count;
+          const variance = Math.max(0, (Number(attrs[`__StatD${face}SqrSum`]) || 0) / count - mean * mean);
+          native.push(`D${face}统计次数: ${count}`, `均值: ${mean.toFixed(2)} [期望 ${(face + 1) / 2}]`);
+          if (variance > 0) native.push(`标准差: ${Math.sqrt(variance).toFixed(2)} [期望 ${Math.sqrt((face * face - 1) / 12).toFixed(2)}]`);
+        }
+        if (checks > 0) {
+          const success = Number(attrs.__StatRcSumSuc) || 0;
+          native.push(`检定成功率: ${success}/${checks}=${(success / checks * 100).toFixed(2)}% [期望 ${((Number(attrs.__StatRcSumRate) || 0) / checks).toFixed(2)}%]`);
+          const low = Number(attrs.__StatRcCnt5) || 0, high = Number(attrs.__StatRcCnt96) || 0;
+          native.push(`5- | 96+ 出现率: ${(low / checks * 100).toFixed(2)}%(${low}) | ${(high / checks * 100).toFixed(2)}%(${high})`);
+          if (attrs.__StatRcCnt1 || attrs.__StatRcCnt100) native.push(`1 | 100 出现数: ${attrs.__StatRcCnt1 || 0} | ${attrs.__StatRcCnt100 || 0}`);
+        }
         if (!stats || stats.totalRolls === 0) {
-          return `人物卡 ${targetName} 还没有掷骰记录喵~`;
+          return native.length ? `人物卡 ${targetName} 的掷骰统计:\n${native.join('\n')}` : `人物卡 ${targetName} 还没有掷骰记录喵~`;
         }
 
         const successRate =
@@ -64,7 +85,7 @@ export function registerPcStatCommand(register: RegisterCommand, ctx: Context, d
 普通成功: ${stats.regularSuccess} (${((stats.regularSuccess / stats.totalRolls) * 100).toFixed(1)}%)
 失败: ${stats.failure} (${((stats.failure / stats.totalRolls) * 100).toFixed(1)}%)
 大失败: ${stats.fumble} (${((stats.fumble / stats.totalRolls) * 100).toFixed(1)}%)
-总成功率: ${successRate}%`;
+总成功率: ${successRate}%${native.length ? `\n${native.join('\n')}` : ''}`;
       } catch (error) {
         logger.error('查看统计错误:', error);
         const message = error instanceof Error ? error.message : String(error);

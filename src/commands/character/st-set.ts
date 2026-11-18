@@ -4,8 +4,10 @@ import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { parseStCommand } from './parser';
 import { logger } from '../../index';
+import type { Config } from '../../config';
+import { mutateAttributes } from '../../services/character/card-operations';
 
-export function registerStSetCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerStSetCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter, config?: Config) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
   register('st [...args:text]', '人物卡管理')
@@ -61,38 +63,45 @@ export function registerStSetCommand(register: RegisterCommand, ctx: Context, di
         const results: string[] = [];
 
         // 处理每个操作
+        let diceCount = 0;
         for (const op of operations) {
-          if (op.op === 'set') {
-            // 直接设置
-            await characterService.setAttributes(session, targetCard, {
-              [op.attr]: op.value as number
-            });
-            results.push(`${op.attr}=${op.value}`);
-          } else {
-            // 增减操作
-            const currentAttrs = await characterService.getAttributes(session, targetCard);
-            const currentValue = currentAttrs?.[op.attr] || 0;
-
-            let delta: number;
-            if (typeof op.value === 'string' && /\d*d\d+/i.test(op.value)) {
-              // 骰子表达式
-              const rollResult = diceAdapter.roll(op.value);
-              delta = rollResult.total;
-            } else {
-              delta = Number(op.value);
+          const raw = op.value;
+          if (typeof raw === 'string') {
+            for (const match of raw.matchAll(/(\d*)[dD](\d+)/g)) {
+              diceCount += Number(match[1] || 1);
+              if (diceCount > (config?.maxDiceCount ?? 100) || Number(match[2]) > (config?.maxDiceFace ?? 1000)) {
+                throw new Error('骰子数量或面数超过限制');
+              }
             }
-
-            const newValue = op.op === 'add' ? currentValue + delta : currentValue - delta;
-
-            await characterService.setAttributes(session, targetCard, {
-              [op.attr]: Math.max(0, newValue)
-            });
-
-            results.push(
-              `${op.attr}${op.op === 'add' ? '+' : '-'}${delta}=${Math.max(0, newValue)}`
-            );
           }
         }
+        await mutateAttributes(ctx, session, targetCard, (attributes) => {
+          const keys = new Set([...Object.keys(attributes), ...operations.map((op) => op.attr)]);
+          if (keys.size > (config?.maxAttributesPerCard ?? 50)) throw new Error('人物卡属性数量已达上限');
+          for (const op of operations) {
+            const raw = op.value;
+            let value: string | number;
+            if (op.expression) value = String(raw);
+            else if (typeof raw === 'string' && /d/i.test(raw)) {
+              const roll = diceAdapter.roll(raw);
+              if (roll.errorCode) throw new Error(roll.errorMsg || '骰子表达式无效');
+              value = roll.total;
+            } else value = Number(raw);
+            if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('属性值无效');
+            if (op.op === 'set') {
+              attributes[op.attr] = value;
+              results.push(`${op.attr}=${value}`);
+            } else {
+              const currentValue = attributes[op.attr] ?? 0;
+              if (typeof currentValue !== 'number' || typeof value !== 'number') throw new Error('属性不是数值');
+              const newValue = op.op === 'add' ? currentValue + value : currentValue - value;
+              if (!Number.isFinite(newValue)) throw new Error('属性值无效');
+              attributes[op.attr] = newValue;
+              results.push(`${op.attr}${op.op === 'add' ? '+' : '-'}${value}=${newValue}`);
+            }
+          }
+          return attributes;
+        });
 
         const prefix = cardName ? `人物卡 ${cardName}` : session.username;
         return `${prefix} ${results.join(' ')}`;

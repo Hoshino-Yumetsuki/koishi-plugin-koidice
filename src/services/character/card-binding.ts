@@ -1,6 +1,6 @@
 import type { Context, Session } from 'koishi';
 import type { CharacterCard, CharacterBinding } from '../../database';
-import { getUserKey, getCard, getActiveCard } from './card-operations';
+import { getUserKey, getCard, getActiveCard, switchCard } from './card-operations';
 
 /**
  * 获取当前群组绑定的人物卡
@@ -16,9 +16,7 @@ export async function getBoundCard(ctx: Context, session: Session): Promise<Char
     guildId
   });
 
-  if (bindings.length === 0) {
-    return null;
-  }
+  if (bindings.length === 0) return getActiveCard(ctx, session);
 
   const binding = bindings[0];
 
@@ -44,20 +42,17 @@ export async function bindCard(
   const guildId = session.guildId || '';
 
   if (!guildId) {
-    throw new Error('只能在群聊中绑定人物卡');
+    if (cardName) {
+      await switchCard(ctx, session, cardName);
+    }
+    return;
   }
-
-  // 如果未指定卡名，使用当前激活的卡
-  let targetCard: CharacterCard | null;
-  if (cardName) {
-    targetCard = await getCard(ctx, session, cardName);
-  } else {
-    targetCard = await getActiveCard(ctx, session);
+  if (!cardName) {
+    await ctx.database.remove('koidice_character_binding', { userId, platform, guildId });
+    return;
   }
-
-  if (!targetCard) {
-    throw new Error('未找到人物卡');
-  }
+  const targetCard = await getCard(ctx, session, cardName);
+  if (!targetCard) throw new Error('未找到人物卡');
 
   // 检查是否已有绑定
   const existing = await ctx.database.get('koidice_character_binding', {
@@ -141,7 +136,7 @@ function toLuaTable(obj: any): string {
 
   const pairs: string[] = [];
   for (const [key, value] of Object.entries(obj)) {
-    const luaKey = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key) ? key : `["${key}"]`;
+    const luaKey = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key) ? key : `[${toLuaTable(key)}]`;
     pairs.push(`${luaKey}=${toLuaTable(value)}`);
   }
   return `{${pairs.join(',')}}`;

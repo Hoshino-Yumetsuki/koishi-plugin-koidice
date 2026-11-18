@@ -6,11 +6,14 @@ import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import { logger } from '../../index';
+import type { Config } from '../../config';
+import type { ExtensionService } from '../../services/extension-service';
+import { mutateAttributes } from '../../services/character';
 
 /**
  * 注册 .pc redo 命令
  */
-export function registerPcRedoCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
+export function registerPcRedoCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter, config?: Config, extensionService?: ExtensionService) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
   register('pc.redo [args:text]', '清空并重新生成人物卡属性')
@@ -24,14 +27,12 @@ export function registerPcRedoCommand(register: RegisterCommand, ctx: Context, d
       }
       try {
         let cardName = '';
+        let preset = 'pc';
 
         if (args?.trim()) {
           const parts = args.trim().split(':');
-          if (parts.length === 1) {
-            cardName = parts[0]?.trim() ?? '';
-          } else if (parts.length === 2) {
-            cardName = parts[1]?.trim() ?? '';
-          }
+          cardName = parts.pop()?.trim() ?? '';
+          preset = parts.join(':') || 'pc';
         }
 
         // 获取目标卡
@@ -39,7 +40,7 @@ export function registerPcRedoCommand(register: RegisterCommand, ctx: Context, d
         if (cardName) {
           targetCard = await characterService.getCard(session, cardName);
           if (!targetCard) {
-            return `人物卡 ${cardName} 不存在喵~`;
+            targetCard = await characterService.createCard(session, cardName);
           }
         } else {
           targetCard = await characterService.getBoundCard(session);
@@ -52,6 +53,7 @@ export function registerPcRedoCommand(register: RegisterCommand, ctx: Context, d
         // 根据卡类型生成属性
         let attributes: Record<string, number> = {};
         const cardType = targetCard.cardType;
+        if ((cardType.toUpperCase() === 'COC7' || cardType.toUpperCase() === 'COC6') && preset.toLowerCase() !== 'pc') return '不支持的模板生成参数';
 
         if (cardType === 'COC7') {
           const cocResult = diceAdapter.generateCOC7();
@@ -74,18 +76,17 @@ export function registerPcRedoCommand(register: RegisterCommand, ctx: Context, d
             }
           }
         } else {
-          return `暂不支持 ${cardType} 类型的属性生成喵~`;
+          if (!extensionService?.getTemplate(cardType)) return `暂不支持 ${cardType} 类型的属性生成喵~`;
+          attributes = extensionService.generatePresetAttributes(cardType, preset, {}, config);
         }
 
         if (Object.keys(attributes).length === 0) {
           return '生成属性失败喵~';
         }
+        if (Object.keys(attributes).length > (config?.maxAttributesPerCard ?? 50)) return '人物卡属性数量已达上限';
 
-        // 清空并设置新属性
-        await ctx.database.set('koidice_character', targetCard.id, {
-          attributes: JSON.stringify(attributes),
-          updatedAt: new Date()
-        });
+        await mutateAttributes(ctx, session, cardName, () => attributes);
+        await characterService.bindCard(session, cardName);
 
         const attrText = Object.entries(attributes)
           .map(([k, v]) => `${k}=${v}`)

@@ -91,6 +91,7 @@ export interface CharacterStats {
   regularSuccess: number; // 普通成功次数
   failure: number; // 失败次数
   fumble: number; // 大失败次数
+  nativeCounters: string;
   updatedAt: Date; // 更新时间
 }
 
@@ -292,6 +293,7 @@ export function extendDatabase(ctx: Context) {
       regularSuccess: 'unsigned',
       failure: 'unsigned',
       fumble: 'unsigned',
+      nativeCounters: { type: 'text', initial: '{}' },
       updatedAt: 'timestamp'
     },
     {

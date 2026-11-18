@@ -22,30 +22,15 @@ export function registerStDelCommand(register: RegisterCommand, ctx: Context, di
           return '请指定要删除的属性名，或使用 all 删除整个人物卡';
         }
 
-        // 特殊处理：如果只有一个参数且不包含 --，当作人物卡名称+all
-        const trimmedArgs = args.trim();
-        if (!trimmedArgs.includes('--') && !trimmedArgs.includes(' ')) {
-          const cardName = trimmedArgs;
-          const card = await characterService.getCard(session, cardName);
-          if (!card) {
-            return `人物卡 ${cardName} 不存在`;
-          }
-          const success = await characterService.deleteCard(session, cardName);
-          return success ? `已删除人物卡 ${cardName}` : '删除失败';
-        }
 
         const { cardName, attributes } = parseAttributeList(args, diceAdapter);
         const targetCard = cardName || null;
 
-        // 检查是否是 all（删除整个人物卡）
         if (attributes.length === 1 && attributes[0].toLowerCase() === 'all') {
-          const card = await characterService.getCard(session, cardName || 'default');
-          if (!card) {
-            return `人物卡 ${cardName || '当前'} 不存在`;
-          }
-
-          const success = await characterService.deleteCard(session, card.cardName);
-          return success ? `已删除人物卡 ${card.cardName}` : '删除失败';
+          const card = cardName ? await characterService.getCard(session, cardName) : await characterService.getActiveCard(session);
+          if (!card) return '人物卡不存在';
+          await ctx.database.set('koidice_character', card.id, { attributes: '{}', updatedAt: new Date() });
+          return `已清空人物卡 ${card.cardName} 的属性`;
         }
 
         // 删除指定属性
@@ -74,14 +59,6 @@ export function registerStDelCommand(register: RegisterCommand, ctx: Context, di
             return `未找到指定的属性: ${notFound.join(', ')}`;
           }
 
-          // 如果删除后没有属性了，删除整个人物卡
-          if (Object.keys(newAttrs).length === 0) {
-            const card = await characterService.getCard(session, cardName || 'default');
-            if (card) {
-              await characterService.deleteCard(session, card.cardName);
-              return `已删除 ${deleted.join(', ')}，人物卡 ${card.cardName} 已被删除（无剩余属性）`;
-            }
-          }
 
           // 更新属性
           // 需要先获取卡片，然后直接更新数据库

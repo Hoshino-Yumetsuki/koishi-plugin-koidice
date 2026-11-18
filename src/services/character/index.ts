@@ -47,12 +47,22 @@ export class CharacterService {
     return CardOps.createCard(this.ctx, session, cardName, cardType, attributes);
   }
 
-  setAttributes(session: Session, cardName: string | null, attributes: Record<string, number>) {
+  setAttributes(session: Session, cardName: string | null, attributes: Record<string, number | string>) {
     return CardOps.setAttributes(this.ctx, session, cardName, attributes);
   }
 
   getAttributes(session: Session, cardName: string | null) {
     return CardOps.getAttributes(this.ctx, session, cardName);
+  }
+
+  getExpression(session: Session, name: string) {
+    return CardOps.getExpression(this.ctx, session, name);
+  }
+
+  async getAttribute(session: Session, name: string): Promise<number | null> {
+    const attrs = await this.getAttributes(session, null);
+    const value: unknown = attrs?.[this.diceAdapter.normalizeAttributeName(name)];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
 
   switchCard(session: Session, cardName: string) {

@@ -7,7 +7,7 @@ import { logger } from '../../index';
 export function registerStClrCommand(register: RegisterCommand, ctx: Context, diceAdapter: DiceAdapter) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  register('st.clr [cardName:text]', '删除人物卡')
+  register('st.clr [cardName:text]', '清空人物卡属性')
     .usage('.st.clr [人物卡名]')
     .example('.st.clr')
     .example('.st.clr Alice')
@@ -16,19 +16,10 @@ export function registerStClrCommand(register: RegisterCommand, ctx: Context, di
         return '无法获取会话信息';
       }
       try {
-        // 没有参数：删除当前激活的人物卡
-        if (!cardName) {
-          const activeCard = await characterService.getActiveCard(session);
-          if (!activeCard) {
-            return '当前没有激活的人物卡';
-          }
-          const success = await characterService.deleteCard(session, activeCard.cardName);
-          return success ? `已删除人物卡 ${activeCard.cardName}` : '删除失败';
-        }
-
-        // 删除指定人物卡
-        const success = await characterService.deleteCard(session, cardName);
-        return success ? `已删除人物卡 ${cardName}` : '人物卡不存在';
+        const card = cardName ? await characterService.getCard(session, cardName) : await characterService.getActiveCard(session);
+        if (!card) return '人物卡不存在';
+        await ctx.database.set('koidice_character', card.id, { attributes: '{}', updatedAt: new Date() });
+        return `已清空人物卡 ${card.cardName} 的属性`;
       } catch (error) {
         logger.error('删除人物卡错误:', error);
         const message = error instanceof Error ? error.message : String(error);

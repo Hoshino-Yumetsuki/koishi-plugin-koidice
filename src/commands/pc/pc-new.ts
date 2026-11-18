@@ -6,7 +6,7 @@ import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import { CharacterService } from '../../services/character-service';
 import type { ExtensionService } from '../../services/extension-service';
-import { generateDefaultAttributes } from '../../services/extension/template-parser';
+import type { Config } from '../../config';
 import { logger } from '../../index';
 
 /**
@@ -16,7 +16,8 @@ export function registerPcNewCommand(
   register: RegisterCommand,
   ctx: Context,
   diceAdapter: DiceAdapter,
-  extensionService?: ExtensionService
+  extensionService?: ExtensionService,
+  config?: Config
 ) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
@@ -40,81 +41,44 @@ export function registerPcNewCommand(
 
         let cardType = 'COC7';
         let cardName = '';
+        let presets = '';
 
-        if (args?.trim()) {
-          const parts = args.trim().split(':');
-
-          if (parts.length === 1) {
-            // 只有卡名
-            cardName = parts[0]?.trim() ?? '';
-          } else if (parts.length === 2) {
-            // 模板:卡名 或 卡名:参数
-            const first = parts[0]?.trim() ?? '';
-            const firstUpper = first.toUpperCase();
-            // 检查是否是内置模板或插件模板
-            if (firstUpper === 'COC6' || firstUpper === 'COC7' || firstUpper === 'DND5E') {
-              cardType = firstUpper;
-              cardName = parts[1]?.trim() ?? '';
-            } else if (extensionService?.getTemplate(first)) {
-              cardType = first;
-              cardName = parts[1]?.trim() ?? '';
-            } else {
-              cardName = parts[0]?.trim() ?? '';
-            }
-          } else if (parts.length === 3) {
-            // 模板:参数:卡名
-            cardType = parts[0]?.trim() || 'COC7';
-            cardName = parts[2]?.trim() ?? '';
-          }
+        const parts = args?.trim().split(':') ?? [];
+        if (parts.length > 1) {
+          cardType = parts[0].trim() || 'COC7';
+          cardName = parts[parts.length - 1].trim();
+          presets = parts.slice(1, -1).join(':');
+        } else if (parts.length === 1) {
+          if (/^COC[67]$/i.test(parts[0]) || extensionService?.getTemplate(parts[0])) cardType = parts[0];
+          else cardName = parts[0];
         }
+        if (/^coc[67]$/i.test(cardType)) cardType = cardType.toUpperCase();
+        if (cardName.includes('=')) return '卡名不能包含等号';
 
         // 如果没有指定卡名，生成随机姓名
         if (!cardName) {
-          const nameResult = diceAdapter.drawFromDeck('调查员姓名', 1);
-          if (nameResult.success && nameResult.cards.length > 0) {
-            cardName = nameResult.cards[0] ?? `角色_${Date.now().toString(36)}`;
-          } else {
-            cardName = `角色_${Date.now().toString(36)}`;
-          }
+          const nameResult = diceAdapter.drawFromDeck('随机姓名', 1);
+          if (!nameResult.success || !nameResult.cards.length) return '随机姓名生成失败';
+          cardName = nameResult.cards[0].trim();
+          if (!cardName) return '随机姓名生成失败';
         }
 
-        // 生成属性
         let attributes: Record<string, number> = {};
-        const cardTypeUpper = cardType.toUpperCase();
-
-        if (cardTypeUpper === 'COC7') {
-          const cocResult = diceAdapter.generateCOC7();
-
-          // 解析COC输出
-          const jsonResult = diceAdapter.parseCOCAttributes(cocResult);
-          if (jsonResult && typeof jsonResult === 'string') {
-            try {
-              attributes = JSON.parse(jsonResult) as Record<string, number>;
-            } catch (e) {
-              logger.warn('解析COC属性失败:', e);
-            }
-          }
-        } else if (cardTypeUpper === 'COC6') {
-          const cocResult = diceAdapter.generateCOC6();
-          const jsonResult = diceAdapter.parseCOCAttributes(cocResult);
-          if (jsonResult && typeof jsonResult === 'string') {
-            try {
-              attributes = JSON.parse(jsonResult) as Record<string, number>;
-            } catch (e) {
-              logger.warn('解析COC属性失败:', e);
-            }
-          }
-        } else if (extensionService) {
-          // 尝试使用插件模板
-          const template = extensionService.getTemplate(cardType);
-          if (template) {
-            attributes = generateDefaultAttributes(template);
-            logger.info(`使用插件模板 ${cardType} 生成属性:`, attributes);
+        if (presets) {
+          if (/^COC[67]$/i.test(cardType) && presets.toLowerCase() === 'pc') {
+            attributes = JSON.parse(diceAdapter.parseCOCAttributes(cardType === 'COC7' ? diceAdapter.generateCOC7() : diceAdapter.generateCOC6()));
+          } else if (extensionService?.getTemplate(cardType)) {
+            attributes = extensionService.generatePresetAttributes(cardType, presets, {}, config);
+          } else {
+            return '不支持的模板生成参数';
           }
         }
+        if (presets && !Object.keys(attributes).length) return '生成属性失败喵~';
+        if (Object.keys(attributes).length > (config?.maxAttributesPerCard ?? 50)) return '人物卡属性数量已达上限';
 
         // 创建人物卡
         await characterService.createCard(session, cardName, cardType, attributes);
+        await characterService.bindCard(session, cardName);
 
         const attrText =
           Object.keys(attributes).length > 0

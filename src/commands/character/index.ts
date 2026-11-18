@@ -6,6 +6,7 @@ import type { Context } from 'koishi';
 import type { RegisterCommand } from '../../command-scope';
 import type { DiceAdapter } from '../../wasm';
 import type { ExtensionService } from '../../services/extension-service';
+import type { Config } from '../../config';
 import { registerStSetCommand } from './st-set';
 import { registerStShowCommand } from './st-show';
 import { registerStSwitchCommand } from './st-switch';
@@ -17,17 +18,18 @@ export function registerCharacterCommands(
   register: RegisterCommand,
   ctx: Context,
   diceAdapter: DiceAdapter,
-  extensionService?: ExtensionService
+  extensionService?: ExtensionService,
+  config?: Config
 ) {
+  registerStSetCommand(register, ctx, diceAdapter, config);
   registerStShowCommand(register, ctx, diceAdapter);
   registerStSwitchCommand(register, ctx, diceAdapter);
   registerStDelCommand(register, ctx, diceAdapter);
   registerStClrCommand(register, ctx, diceAdapter);
 
-  registerStSetCommand(register, ctx, diceAdapter);
 
   // 注册.pc多人物卡命令
-  registerPcCommands(register, ctx, diceAdapter, extensionService);
+  registerPcCommands(register, ctx, diceAdapter, extensionService, config);
 }
 
 export * from './types';
