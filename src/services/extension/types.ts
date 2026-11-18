@@ -50,7 +50,15 @@ export interface ReplyConfig {
   keyword?: ReplyKeyword;
   echo?: string | string[] | ReplyEcho;
   limit?: ReplyLimit;
+  callbackKey?: string;
 }
+export interface LocalEvent {
+  trigger: Record<string, unknown>;
+  action: Record<string, unknown>;
+  script?: string;
+  callbackKey?: string;
+}
+
 
 export interface LoadedPlugin {
   name: string;
@@ -58,6 +66,8 @@ export interface LoadedPlugin {
   descriptor: DescriptorJson;
   scripts: Map<string, string>;
   commands: Map<string, ReplyConfig>;
+  events: Map<string, LocalEvent>;
+  replyScripts: Map<string, string>;
   scriptNames: Set<string>;
   disposers: Array<() => void>;
   templateKeys: Set<string>;
@@ -65,6 +75,9 @@ export interface LoadedPlugin {
 }
 
 export interface ExtensionContext {
+  __eventKey?: string;
+  event?: Record<string, unknown>;
+  __replyKey?: string;
   suffix: string;
   uid: string;
   gid: string;
@@ -72,6 +85,7 @@ export interface ExtensionContext {
   char?: Record<string, unknown>;
   card: string;
   game: Record<string, unknown>;
+  playerCards: Record<string, Record<string, unknown>>;
   pluginRules: Record<string, unknown>;
   templateAliasMap: Record<string, Record<string, string>>;
 }

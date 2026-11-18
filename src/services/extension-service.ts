@@ -6,11 +6,12 @@ import * as toml from '@iarna/toml';
 import { logger } from '../index';
 import { CharacterService } from './character';
 import { GameSessionService } from './game-session-service';
-import type { DescriptorJson, ReplyConfig, LoadedPlugin } from './extension/types';
-import { wrapLuaScript } from './extension/script-wrapper';
+import type { DescriptorJson, ReplyConfig, LoadedPlugin, LocalEvent } from './extension/types';
+import { wrapLuaScript, wrapLuaReplyScript } from './extension/script-wrapper';
 import { loadRulebooks } from './extension/rulebook-loader';
 import { registerPluginCommands } from './extension/command-registry';
-import { parseTemplate, createAliasMap, type CharacterTemplate } from './extension/template-parser';
+import { registerPluginEvents } from './extension/event-registry';
+import { parseTemplate, createAliasMap, generatePresetAttributes, type CharacterTemplate } from './extension/template-parser';
 
 /** Dice build exposed by the pinned upstream revision 7e17e653. */
 export const SUPPORTED_DICE_BUILD = 668;
@@ -24,6 +25,8 @@ interface DiscoveredPlugin {
 
 export class ExtensionService {
   private loadedPlugins = new Map<string, LoadedPlugin>();
+  private discoveredPlugins = new Map<string, DiscoveredPlugin>();
+  private disabledPlugins = new Set<string>();
   private pluginRules = new Map<string, Rulebook>();
   private pluginTemplates = new Map<string, CharacterTemplate>();
   private templateAliasMap = new Map<string, Record<string, string>>();
@@ -48,11 +51,19 @@ export class ExtensionService {
     await fs.mkdir(this.pluginDir, { recursive: true });
     logger.info(`Plugin directory: ${this.pluginDir}`);
 
+    try {
+      const disabled: unknown = JSON.parse(await fs.readFile(path.join(this.pluginDir, 'disabled.json'), 'utf-8'));
+      if (Array.isArray(disabled)) this.disabledPlugins = new Set(disabled.filter((name): name is string => typeof name === 'string'));
+    } catch (error) {
+      if (!this.isMissingFile(error)) throw error;
+    }
     const discovered = await this.discoverPlugins();
+    this.discoveredPlugins = discovered;
     const ordered = this.resolveLoadOrder(discovered);
     logger.info(`Found ${discovered.size} valid plugin descriptor(s)`);
 
     for (const plugin of ordered) {
+      if (this.disabledPlugins.has(plugin.descriptor.name)) continue;
       if (plugin.descriptor.require?.some((dependency) => !this.loadedPlugins.has(dependency))) {
         logger.error(`Skipping plugin ${plugin.descriptor.name}: a dependency failed to load`);
         continue;
@@ -95,11 +106,13 @@ export class ExtensionService {
     }
 
     const descriptor = value as Record<string, unknown>;
+    if (descriptor.name === undefined) descriptor.name = path.basename(pluginPath);
     if (typeof descriptor.name !== 'string' || !descriptor.name.trim()) {
       throw new Error('descriptor field "name" must be a non-empty string');
     }
-    if (typeof descriptor.ver !== 'string' || !descriptor.ver.trim()) {
-      throw new Error('descriptor field "ver" must be a non-empty string');
+    if (descriptor.ver === undefined) descriptor.ver = '';
+    if (typeof descriptor.ver !== 'string') {
+      throw new Error('descriptor field "ver" must be a string');
     }
     if (
       descriptor.require !== undefined &&
@@ -190,8 +203,10 @@ export class ExtensionService {
 
     const scripts = new Map<string, string>();
     const commands = new Map<string, ReplyConfig>();
+    const events = new Map<string, LocalEvent>();
     const scriptNames = new Set<string>();
     const templateKeys = new Set<string>();
+    const replyScripts = new Map<string, string>();
     const ruleKeys = new Set<string>();
     const disposers: Array<() => void> = [];
     const plugin: LoadedPlugin = {
@@ -200,7 +215,9 @@ export class ExtensionService {
       descriptor,
       scripts,
       commands,
+      events,
       scriptNames,
+      replyScripts,
       disposers,
       templateKeys,
       ruleKeys
@@ -218,7 +235,7 @@ export class ExtensionService {
       await this.loadRules(plugin);
 
       try {
-        await this.loadReplyConfigs(path.join(pluginPath, 'reply'), commands);
+        await this.loadReplyConfigs(path.join(pluginPath, 'reply'), commands, plugin);
       } catch (error) {
         if (!this.isMissingFile(error)) throw error;
       }
@@ -234,6 +251,7 @@ export class ExtensionService {
           this.templateAliasMap
         ))
       );
+      disposers.push(...registerPluginEvents(this.ctx, this.adapter, plugin));
 
       this.loadedPlugins.set(descriptor.name, plugin);
       logger.info(`Plugin loaded: ${descriptor.name}`);
@@ -246,12 +264,26 @@ export class ExtensionService {
   }
 
   private async registerScripts(plugin: LoadedPlugin): Promise<void> {
+    for (const [name, code] of plugin.replyScripts) {
+      const owner = this.scriptOwners.get(name);
+      if (owner) throw new Error(`script name "${name}" is already owned by ${owner}`);
+      if (!this.adapter.loadLuaExtension(name, wrapLuaReplyScript(code), code)) throw new Error(`native script registration failed: ${name}`);
+      plugin.scriptNames.add(name);
+      this.scriptOwners.set(name, plugin.name);
+    }
     for (const [scriptName, code] of plugin.scripts) {
       const isLua = scriptName.endsWith('.lua');
       const fullName = scriptName.replace(/\.(lua|js)$/, '');
       const names = [fullName];
       if (fullName.startsWith(`${plugin.name}.`)) {
         names.push(fullName.slice(plugin.name.length + 1));
+      }
+      if (isLua && fullName.endsWith('.init')) {
+        const moduleName = fullName.slice(0, -'.init'.length);
+        names.push(moduleName);
+        if (moduleName.startsWith(`${plugin.name}.`)) {
+          names.push(moduleName.slice(plugin.name.length + 1));
+        }
       }
       for (const name of names) {
         const owner = this.scriptOwners.get(name);
@@ -337,15 +369,45 @@ export class ExtensionService {
 
   private async loadReplyConfigs(
     replyDir: string,
-    commands: Map<string, ReplyConfig>
+    commands: Map<string, ReplyConfig>,
+    plugin: LoadedPlugin
   ): Promise<void> {
-    const files = (await fs.readdir(replyDir)).filter((file) => file.endsWith('.toml')).sort();
-    for (const file of files) {
+    const entries = (await fs.readdir(replyDir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await this.loadReplyConfigs(path.join(replyDir, entry.name), commands, plugin);
+        continue;
+      }
+      if (entry.isFile() && entry.name.endsWith('.lua')) {
+        const file = path.join(replyDir, entry.name);
+        const name = `${plugin.name}.__reply.${path.relative(path.join(plugin.path, 'reply'), file).replace(/[/\\]/g, '.')}`;
+        if (this.scriptOwners.has(name)) throw new Error(`script name "${name}" is already owned`);
+        const code = await fs.readFile(file, 'utf-8');
+        if (!this.adapter.loadLuaExtension(name, wrapLuaReplyScript(code), code)) throw new Error(`native script registration failed: ${name}`);
+        plugin.replyScripts.set(name, code);
+        plugin.scriptNames.add(name);
+        this.scriptOwners.set(name, plugin.name);
+        const { result } = this.adapter.callExtension(name, {});
+        const data = JSON.parse(result) as { reply?: Record<string, ReplyConfig>; event?: Record<string, unknown> };
+        if (!data.reply || typeof data.reply !== 'object' || Array.isArray(data.reply)) throw new Error(`invalid msg_reply in ${entry.name}`);
+        this.collectEvents(data.event, plugin, name);
+        for (const [key, config] of Object.entries(data.reply)) {
+          if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error(`invalid reply ${key}`);
+          if (config.echo === '__koidice_lua_callback__') config.echo = { lua: name };
+          else if (typeof config.echo === 'object' && !Array.isArray(config.echo) && config.echo?.lua === '__koidice_lua_callback__') config.echo.lua = name;
+          if (typeof config.echo === 'object' && !Array.isArray(config.echo) && config.echo?.lua === name) config.callbackKey = key;
+          commands.set(key, config);
+        }
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith('.toml')) continue;
+      const file = entry.name;
       const config = toml.parse(await fs.readFile(path.join(replyDir, file), 'utf-8')) as Record<
         string,
         unknown
       >;
       const replies = config.reply;
+      this.collectEvents(config.event, plugin);
       if (!replies || typeof replies !== 'object' || Array.isArray(replies)) {
         continue;
       }
@@ -355,8 +417,47 @@ export class ExtensionService {
     }
   }
 
+  private collectEvents(value: unknown, plugin: LoadedPlugin, script?: string): void {
+    if (value == null) return;
+    if (typeof value !== 'object' || Array.isArray(value)) throw new Error('event must be a table');
+    for (const [key, item] of Object.entries(value)) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`invalid event ${key}`);
+      const { trigger, action } = item as Record<string, unknown>;
+      if (!trigger || typeof trigger !== 'object' || Array.isArray(trigger) || !action || typeof action !== 'object' || Array.isArray(action)) throw new Error(`invalid event ${key}`);
+      const event: LocalEvent = { trigger: trigger as Record<string, unknown>, action: action as Record<string, unknown> };
+      if (event.action.lua === '__koidice_lua_callback__') {
+        if (!script) throw new Error(`invalid event callback ${key}`);
+        event.script = script;
+        event.callbackKey = key;
+      }
+      plugin.events.set(key, event);
+    }
+  }
+
   listPlugins(): LoadedPlugin[] {
     return Array.from(this.loadedPlugins.values());
+  }
+
+  listInstalledPlugins(): Array<{ descriptor: DescriptorJson; enabled: boolean; loaded: boolean }> {
+    return [...this.discoveredPlugins.values()].map(({ descriptor }) => ({
+      descriptor,
+      enabled: !this.disabledPlugins.has(descriptor.name),
+      loaded: this.loadedPlugins.has(descriptor.name)
+    }));
+  }
+
+  async setPluginEnabled(name: string, enabled: boolean): Promise<boolean> {
+    const plugin = this.discoveredPlugins.get(name);
+    if (!plugin) return false;
+    if (enabled) {
+      if (!this.loadedPlugins.has(name) && !(await this.loadPlugin(plugin.path))) return false;
+      this.disabledPlugins.delete(name);
+    } else {
+      if (this.loadedPlugins.has(name) && !this.unloadPlugin(name)) return false;
+      this.disabledPlugins.add(name);
+    }
+    await fs.writeFile(path.join(this.pluginDir, 'disabled.json'), JSON.stringify([...this.disabledPlugins].sort(), null, 2), 'utf-8');
+    return true;
   }
 
   getPlugin(name: string): LoadedPlugin | undefined {
@@ -373,6 +474,12 @@ export class ExtensionService {
 
   getTemplate(templateName: string): CharacterTemplate | undefined {
     return this.pluginTemplates.get(templateName);
+  }
+
+  generatePresetAttributes(templateName: string, presets = 'pc', initial: Record<string, number> = {}, limits = { maxDiceCount: 100, maxDiceFace: 1000 }): Record<string, number> {
+    const template = this.getTemplate(templateName);
+    if (!template) throw new Error(`Unknown template: ${templateName}`);
+    return generatePresetAttributes(template, presets, initial, this.adapter, limits);
   }
 
   listTemplates(): string[] {
@@ -446,18 +553,36 @@ export class ExtensionService {
     const plugin = this.loadedPlugins.get(name);
     if (!plugin) return false;
     const pluginPath = plugin.path;
+    const templates = new Map([...plugin.templateKeys].map((key) => [key, this.pluginTemplates.get(key)!]));
+    const rules = new Map([...plugin.ruleKeys].map((key) => [key, this.pluginRules.get(key)!]));
     this.releasePlugin(plugin);
     this.loadedPlugins.delete(name);
-    if (await this.loadPlugin(pluginPath)) return true;
+    try {
+      const descriptor = await this.readDescriptor(pluginPath);
+      if (descriptor.name !== name) throw new Error(`plugin name changed from ${name} to ${descriptor.name}`);
+      if (await this.loadPlugin(pluginPath, descriptor)) return true;
+    } catch (error) {
+      logger.error(`Reload validation failed for ${name}:`, error);
+    }
     logger.error(`Reload failed for ${name}; restoring previous plugin contents`);
-    return this.restorePlugin(plugin);
+    await this.restorePlugin(plugin, templates, rules);
+    return false;
   }
 
-  private async restorePlugin(plugin: LoadedPlugin): Promise<boolean> {
+  private async restorePlugin(plugin: LoadedPlugin, templates: Map<string, CharacterTemplate>, rules: Map<string, Rulebook>): Promise<boolean> {
     try {
       await this.registerScripts(plugin);
-      await this.loadTemplates(plugin);
-      await this.loadRules(plugin);
+      for (const [key, template] of templates) {
+        this.pluginTemplates.set(key, template);
+        this.templateAliasMap.set(key, createAliasMap(template));
+        this.templateOwners.set(key, plugin.name);
+        plugin.templateKeys.add(key);
+      }
+      for (const [key, rule] of rules) {
+        this.pluginRules.set(key, rule);
+        this.ruleOwners.set(key, plugin.name);
+        plugin.ruleKeys.add(key);
+      }
       plugin.disposers.push(
         ...(await registerPluginCommands(
           this.ctx,
@@ -470,6 +595,7 @@ export class ExtensionService {
           this.templateAliasMap
         ))
       );
+      plugin.disposers.push(...registerPluginEvents(this.ctx, this.adapter, plugin));
       this.loadedPlugins.set(plugin.name, plugin);
       return true;
     } catch (error) {

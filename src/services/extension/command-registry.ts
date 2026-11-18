@@ -1,4 +1,5 @@
 import type { Context, Session } from 'koishi';
+import { RE2JS } from 're2js';
 import type { DiceAdapter, ExtensionDataSnapshot, ExtensionDataWrite } from '../../wasm';
 import type {
   DescriptorJson,
@@ -9,6 +10,10 @@ import type {
   ReplyMatchMode
 } from './types';
 import { logger } from '../../index';
+import { communityCommandsEnabled, communityRepliesEnabled } from '../../commands/community';
+import { getActiveCard } from '../character/card-operations';
+import { tableChannelCommandsEnabled } from '../../commands/table-links';
+import { getUserNickname } from '../../commands/nickname';
 import { replacePlaceholders } from './script-wrapper';
 import type { CharacterService } from '../character-service';
 import type { GameSessionService } from '../game-session-service';
@@ -20,7 +25,7 @@ interface MatchResult {
 interface RegisteredReply {
   config: ReplyConfig;
   scriptName?: string;
-  matchers: Array<{ mode: ReplyMatchMode; value: string | RegExp }>;
+  matchers: Array<{ mode: ReplyMatchMode; value: string | RE2JS }>;
 }
 
 export async function registerPluginCommands(
@@ -60,9 +65,17 @@ export async function registerPluginCommands(
         .sort((left, right) => right.matched!.matchedLength - left.matched!.matchedLength);
       for (const { reply, matched } of candidates) {
         const type = (reply.config.type || 'Reply').toLowerCase();
-        if (type !== 'reply' && type !== 'both') continue;
+        if (type === 'nor') continue;
+        if (type === 'game' || reply.config.rule) {
+          const game = await gameSessionService.getSession(session);
+          if (!game || !gameSessionService.isParticipant(game, session.userId || '')) continue;
+          if (reply.config.rule && gameSessionService.gameToContext(game).rule !== reply.config.rule) continue;
+        }
+        if (type === 'reply' && !(await communityRepliesEnabled(ctx, session))) continue;
         if (!allowsSession(reply.config.limit, session)) continue;
         if (!passesProbability(reply.config.limit?.prob)) continue;
+        if (!(await tableChannelCommandsEnabled(ctx, session))) continue;
+        if (!(await communityCommandsEnabled(ctx, session))) continue;
         const result = await executeReply(
           ctx,
           adapter,
@@ -93,7 +106,8 @@ function compileMatchers(name: string, config: ReplyConfig) {
       if (!value) continue;
       if (mode === 'regex') {
         try {
-          result.push({ mode, value: new RegExp(value, 'u') });
+          if (value.length > 512) throw new Error('pattern exceeds 512 characters');
+          result.push({ mode, value: RE2JS.compile(`\\A(?:${value})\\z`, RE2JS.CASE_INSENSITIVE) });
         } catch (error) {
           logger.warn(`Invalid extension regex ${value}: ${String(error)}`);
         }
@@ -106,7 +120,7 @@ function compileMatchers(name: string, config: ReplyConfig) {
   append('prefix', keyword.prefix ?? keyword.Prefix);
   append('search', keyword.search ?? keyword.Search);
   append('regex', keyword.regex ?? keyword.Regex);
-  if (!result.length) append('prefix', `.${name}`);
+  if (!result.length && !asArray(keyword.regex ?? keyword.Regex).length) append('match', name);
   return result;
 }
 
@@ -118,9 +132,10 @@ function matchReply(
   const foldedContent = content.toLocaleLowerCase();
   for (const matcher of reply.matchers) {
     if (matcher.mode !== mode) continue;
-    if (matcher.value instanceof RegExp) {
+    if (matcher.value instanceof RE2JS) {
+      if (content.length > 4096) continue;
       const match = matcher.value.exec(content);
-      if (match && match.index === 0 && match[0].length === content.length) {
+      if (match) {
         return { suffix: match[1] ?? '', matchedLength: match[0].length };
       }
       continue;
@@ -167,19 +182,21 @@ async function executeReply(
       pluginRules,
       templateAliasMap
     );
+    if (reply.config.callbackKey) context.__replyKey = reply.config.callbackKey;
     let result = '';
     const echo = normalizeEcho(reply.config.echo);
     if (reply.scriptName) {
-      const snapshot = await loadDataSnapshot(ctx, context.uid, context.gid);
-      result = await adapter.callExtension(reply.scriptName, context, snapshot);
-      await persistWrites(ctx, adapter.drainExtensionDataWrites());
+      const snapshot = await loadDataSnapshot(ctx, session.platform, session.selfId, descriptor.name, context.uid, context.gid);
+      const call = adapter.callExtension(reply.scriptName, context, snapshot);
+      result = call.result;
+      if (!result.startsWith('[Error]')) await persistWrites(ctx, session.platform, session.selfId, descriptor.name, call.writes);
     } else if (echo.deck?.length) {
-      result = echo.deck[Math.floor(Math.random() * echo.deck.length)] || '';
+      result = drawReplyCard(echo.deck);
     } else {
       result = echo.text || '';
     }
     return replacePlaceholders(result, {
-      username: session.username,
+      username: await getUserNickname(session, ctx),
       userId: session.userId,
       guildId: session.guildId,
       charName:
@@ -232,7 +249,20 @@ async function buildExtensionContext(
     logger.debug('读取扩展游戏会话失败:', error);
   }
 
-  const gid = session.guildId || session.channelId || '';
+  const playerCards: Record<string, Record<string, unknown>> = {};
+  if (Array.isArray(game.pls)) {
+    for (const uid of game.pls) {
+      if (typeof uid !== 'string') continue;
+      const player = await getActiveCard(ctx, {
+        userId: uid, platform: session.platform, guildId: session.guildId
+      } as Session);
+      if (!player) continue;
+      const attributes = typeof player.attributes === 'string'
+        ? JSON.parse(player.attributes) : player.attributes;
+      playerCards[uid] = { __Name: player.cardName, name: player.cardName, type: player.cardType, ...attributes };
+    }
+  }
+  const gid = session.guildId || '';
   const cardRows = gid
     ? await ctx.database.get('koidice_group_data', {
         guildId: gid,
@@ -248,33 +278,56 @@ async function buildExtensionContext(
     char,
     card: cardRows[0]?.dataValue || '',
     game,
+    playerCards,
     pluginRules: Object.fromEntries(pluginRules),
     templateAliasMap: templateAliasMap ? Object.fromEntries(templateAliasMap) : {}
   };
 }
 
-async function loadDataSnapshot(
+function drawReplyCard(cards: string[]): string {
+  if (cards.length === 1) return cards[0];
+  const entries = cards.map((card) => {
+    const match = /::(\d{1,6})::/u.exec(card);
+    const weight = match ? Number(match[1]) : 0;
+    return weight > 0 && match
+      ? { value: card.slice(match.index + match[0].length), weight }
+      : { value: card, weight: 1 };
+  });
+  let choice = Math.floor(Math.random() * entries.reduce((sum, entry) => sum + entry.weight, 0));
+  for (const entry of entries) {
+    if (choice < entry.weight) return entry.value;
+    choice -= entry.weight;
+  }
+  return '';
+}
+
+export async function loadDataSnapshot(
   ctx: Context,
+  platform: string,
+  selfId: string,
+  plugin: string,
   uid: string,
   gid: string
 ): Promise<ExtensionDataSnapshot> {
-  const users = uid ? await ctx.database.get('koidice_user_data', { userId: uid }) : [];
-  const groups = gid ? await ctx.database.get('koidice_group_data', { guildId: gid }) : [];
+  const users = uid ? await ctx.database.get('koidice_user_data', { userId: JSON.stringify([platform, selfId, plugin, uid]) }) : [];
+  const groups = gid ? await ctx.database.get('koidice_group_data', { guildId: JSON.stringify([platform, selfId, plugin, gid]) }) : [];
   return {
     users: users.map((row) => ({ id: uid, key: row.dataKey, value: row.dataValue })),
     groups: groups.map((row) => ({ id: gid, key: row.dataKey, value: row.dataValue }))
   };
 }
 
-async function persistWrites(ctx: Context, writes: ExtensionDataWrite[]) {
-  const userRows = writes
-    .filter((write) => write.scope === 'user')
-    .map((write) => ({ userId: write.id, dataKey: write.key, dataValue: write.value }));
-  const groupRows = writes
-    .filter((write) => write.scope === 'group')
-    .map((write) => ({ guildId: write.id, dataKey: write.key, dataValue: write.value }));
-  if (userRows.length) await ctx.database.upsert('koidice_user_data', userRows);
-  if (groupRows.length) await ctx.database.upsert('koidice_group_data', groupRows);
+export async function persistWrites(ctx: Context, platform: string, selfId: string, plugin: string, writes: ExtensionDataWrite[], active = () => true) {
+  const users = new Map<string, { userId: string; dataKey: string; dataValue: string }>();
+  const groups = new Map<string, { guildId: string; dataKey: string; dataValue: string }>();
+  for (const write of writes) {
+    const key = JSON.stringify([write.id, write.key]);
+    const owner = JSON.stringify([platform, selfId, plugin, write.id]);
+    if (write.scope === 'user') users.set(key, { userId: owner, dataKey: write.key, dataValue: write.value });
+    else if (write.scope === 'group') groups.set(key, { guildId: owner, dataKey: write.key, dataValue: write.value });
+  }
+  if (users.size && active()) await ctx.database.upsert('koidice_user_data', [...users.values()], ['userId', 'dataKey']);
+  if (groups.size && active()) await ctx.database.upsert('koidice_group_data', [...groups.values()], ['guildId', 'dataKey']);
 }
 
 function allowsSession(limit: ReplyLimit | undefined, session: Session): boolean {

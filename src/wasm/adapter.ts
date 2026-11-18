@@ -622,14 +622,14 @@ export class DiceAdapter {
   /**
    * Invoke an extension after optionally replacing its in-memory data snapshot.
    */
-  async callExtension(
+  callExtension(
     name: string,
     context: ExtensionContext,
     snapshot?: ExtensionDataSnapshot
-  ): Promise<string> {
+  ): { result: string; writes: ExtensionDataWrite[] } {
     const module = this.ensureModule();
+    module.clearExtensionData();
     if (snapshot) {
-      module.clearExtensionData();
       for (const entry of snapshot.users ?? []) {
         module.preloadUserExtensionData(entry.id, entry.key, entry.value);
       }
@@ -637,7 +637,9 @@ export class DiceAdapter {
         module.preloadGroupExtensionData(entry.id, entry.key, entry.value);
       }
     }
-    return module.callExtension(name, context);
+    const result = module.callExtension(name, context);
+    const writes: ExtensionDataWrite[] = JSON.parse(module.drainExtensionDataWrites());
+    return { result, writes };
   }
 
   clearExtensionData(): void {
@@ -652,11 +654,6 @@ export class DiceAdapter {
     this.ensureModule().preloadGroupExtensionData(gid, key, value);
   }
 
-  drainExtensionDataWrites(): ExtensionDataWrite[] {
-    const writes: unknown = JSON.parse(this.ensureModule().drainExtensionDataWrites());
-    // The native binding is the sole producer and serializes this exact shape.
-    return writes as ExtensionDataWrite[];
-  }
 
   cleanupExtensions(): void {
     this.ensureModule().cleanupExtensions();

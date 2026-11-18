@@ -17,12 +17,33 @@ export function registerExtensionCommands(
     return;
   }
 
+  register('mod [operation:string] [name:text]', '管理本地安装的扩展').action(async ({ session }, operation, name) => {
+    if (!session) return '无法获取会话信息';
+    const plugins = extensionService.listInstalledPlugins();
+    if (!operation || operation === 'list') {
+      return plugins.length ? plugins.map(({ descriptor, enabled, loaded }) =>
+        `${descriptor.name} ${enabled ? (loaded ? '已启用' : '启用但加载失败') : '已停用'}`
+      ).join('\n') : '当前没有安装扩展';
+    }
+    const item = plugins.find(({ descriptor }) => descriptor.name === name);
+    if (!item) return `插件 "${name || ''}" 不存在`;
+    if (operation === 'info' || operation === 'detail') {
+      const d = item.descriptor;
+      return [d.title || d.name, d.ver && `版本: ${d.ver}`, d.author && `作者: ${d.author}`, d.brief, d.desc].filter(Boolean).join('\n');
+    }
+    if (!['on', 'off', 'reload'].includes(operation)) return '仅支持本地 list/info/detail/on/off/reload';
+    if ((await session.observeUser(['authority'])).authority < 4) return '权限不足';
+    if (operation === 'reload') {
+      return await extensionService.reloadPlugin(item.descriptor.name) ? '重载成功' : '重载失败';
+    }
+    return await extensionService.setPluginEnabled(item.descriptor.name, operation === 'on') ? '设置成功' : '设置失败（请检查依赖和日志）';
+  });
+
   const cmd = register('ext', '扩展/插件管理').usage('管理 Lua/JS 扩展插件');
 
   // 列出所有插件
   cmd
     .subcommand('.list', '列出已加载的插件')
-    .alias('.ls')
     .action(async () => {
       try {
         const plugins = extensionService.listPlugins();
@@ -96,7 +117,7 @@ export function registerExtensionCommands(
             keyword.Search ??
             keyword.regex ??
             keyword.Regex ??
-            `.${cmdName}`;
+            cmdName;
           const echo = config.echo;
           const target =
             typeof echo === 'object' && !Array.isArray(echo)
@@ -115,7 +136,7 @@ export function registerExtensionCommands(
   });
 
   // 重载插件
-  cmd.subcommand('.reload <name:text>', '重新加载插件').action(async (_, name) => {
+  cmd.subcommand('.reload <name:text>', '重新加载插件', { authority: 4 }).action(async (_, name) => {
     if (!name) {
       return '请指定插件名称';
     }

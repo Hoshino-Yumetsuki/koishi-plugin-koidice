@@ -13,6 +13,7 @@ export function wrapLuaScript(code: string, _descriptor: DescriptorJson): string
 
   // 包装脚本，提供全局函数访问
   return `return function(msg)
+  local event = msg.event
   -- 提取 dice API 为局部变量（同步版本）
   -- 自定义 queryRule 函数，支持插件规则
   local function queryRule(query)
@@ -51,26 +52,11 @@ export function wrapLuaScript(code: string, _descriptor: DescriptorJson): string
     return dice.getUserData(uid, key)
   end
 
-  -- 创建玩家卡片缓存表(稍后填充)
-  local playerCardCache = {}
 
   -- 属性别名映射表(从插件模板加载)
   -- 格式: { ["Maid"] = { ["Favor"] = "宠爱", ["Stress"] = "压力", ... } }
   local templateAliasMap = msg.templateAliasMap or {}
 
-  -- 调试: 输出别名映射
-  if templateAliasMap and type(templateAliasMap) == "table" then
-    for cardType, aliasMap in pairs(templateAliasMap) do
-      dice.log("Template alias map for " .. cardType .. ":")
-      if type(aliasMap) == "table" then
-        for alias, chineseName in pairs(aliasMap) do
-          dice.log("  " .. alias .. " -> " .. chineseName)
-        end
-      end
-    end
-  else
-    dice.log("No template alias map available")
-  end
 
   -- 为角色卡添加别名查找元表
   local function addAliasMetatable(card)
@@ -106,121 +92,14 @@ export function wrapLuaScript(code: string, _descriptor: DescriptorJson): string
     return card
   end
 
-  -- 简单的 JSON 解析辅助函数
-  local function parseJSON(str)
-    if not str or str == "" then return nil end
 
-    local success, result = pcall(function()
-      -- 移除外层空格
-      str = str:gsub("^%s+", ""):gsub("%s+$", "")
-
-      -- 先尝试作为 Lua table 字面量解析
-      local func = load("return " .. str)
-      if func then
-        local ok, data = pcall(func)
-        if ok then return data end
-      end
-
-      -- 如果失败,尝试 JSON 解析
-      -- 简单的 JSON 到 Lua 转换
-      local jsonStr = str
-      -- 处理对象: {"key":value} -> {["key"]=value}
-      jsonStr = jsonStr:gsub('"([^"]+)"%s*:', function(k)
-        return '["' .. k .. '"]='
-      end)
-      -- 处理布尔值和 null
-      jsonStr = jsonStr:gsub(':%s*true', '=true')
-      jsonStr = jsonStr:gsub(':%s*false', '=false')
-      jsonStr = jsonStr:gsub(':%s*null', '=nil')
-      jsonStr = jsonStr:gsub(',%s*true', ',true')
-      jsonStr = jsonStr:gsub(',%s*false', ',false')
-      jsonStr = jsonStr:gsub(',%s*null', ',nil')
-
-      func = load("return " .. jsonStr)
-      if func then
-        local ok, data = pcall(func)
-        if ok then return data end
-      end
-
-      return nil
-    end)
-
-    return success and result or nil
-  end
-
-  -- getPlayerCard 从缓存中实时查询（同步）
-  -- 使用脚本初始化时创建的 playerCardCache 表
   local function getPlayerCard(uid, gid)
-    local card
-    -- 如果是当前用户,直接返回 msg.char
-    if uid == msg.uid then
-      card = msg.char
-    else
-      -- 从缓存表中获取
-      card = playerCardCache[uid]
-    end
-
-    -- 为角色卡添加别名查找元表
-    if card then
-      card = addAliasMetatable(card)
-    end
-
-    return card
+    if gid and gid ~= msg.gid then return nil end
+    return addAliasMetatable(uid == msg.uid and msg.char or (msg.playerCards or {})[uid])
   end
 
-  -- 缓存角色卡数据（供脚本主动缓存使用）
-  local function cachePlayerCard(uid, cardData, gid)
-    if not cardData then return end
-    local cacheKey = "player_card#" .. uid
-    -- 简单的 table 序列化（Lua table 字面量格式）
-    local function serialize(t)
-      if type(t) ~= "table" then
-        if type(t) == "string" then
-          return string.format("%q", t)
-        else
-          return tostring(t)
-        end
-      end
-      local result = "{"
-      local first = true
-      for k, v in pairs(t) do
-        if not first then result = result .. "," end
-        first = false
-        if type(k) == "string" then
-          result = result .. "[" .. string.format("%q", k) .. "]="
-        else
-          result = result .. "[" .. k .. "]="
-        end
-        result = result .. serialize(v)
-      end
-      result = result .. "}"
-      return result
-    end
-    local serialized = serialize(cardData)
-    dice.setGroupData(gid or msg.gid, cacheKey, serialized)
-  end
 
-  -- 填充玩家卡片缓存表(从 msg 中提取预缓存的数据)
   if msg.game and msg.game.pls then
-    dice.log("game.pls exists, length: " .. tostring(#msg.game.pls))
-
-    -- 为每个玩家ID尝试从数据库缓存中加载角色卡
-    for i = 1, #msg.game.pls do
-      local playerId = msg.game.pls[i]
-      local cacheKey = "player_card#" .. playerId
-      local cached = dice.getGroupData(msg.gid, cacheKey)
-      if cached and cached ~= "" then
-        local card = parseJSON(cached)
-        if card then
-          -- 为角色卡添加别名查找元表
-          card = addAliasMetatable(card)
-          playerCardCache[playerId] = card
-          dice.log("Cached player card for: " .. playerId .. ", type: " .. tostring(card.type))
-        end
-      end
-    end
-
-    -- 添加 totable() 方法（兼容原版 Dice）
     local pls_mt = {
       __index = {
         totable = function(self)
@@ -230,19 +109,8 @@ export function wrapLuaScript(code: string, _descriptor: DescriptorJson): string
       }
     }
     setmetatable(msg.game.pls, pls_mt)
-  else
-    dice.log("game.pls does not exist or is nil")
   end
-
-  -- 为当前用户的角色卡添加别名元表
-  if msg.char then
-    msg.char = addAliasMetatable(msg.char)
-  end
-
-  -- 自动缓存当前用户的角色卡数据（供 getPlayerCard 使用）
-  if msg.char and msg.uid and msg.gid then
-    cachePlayerCard(msg.uid, msg.char, msg.gid)
-  end
+  if msg.char then msg.char = addAliasMetatable(msg.char) end
 
   -- 原始脚本代码
   local __result = (function()
@@ -256,6 +124,70 @@ ${code}
   end
 
   return __result
+end`;
+}
+
+/** Evaluate a local Dice mod reply file inside the existing bounded Lua sandbox. */
+export function wrapLuaReplyScript(code: string): string {
+  return `return function(msg)
+  local msg_reply, event = {}, {}
+  local __definitions = event
+  ${code}
+  if msg.__eventKey then
+    local item = __definitions[msg.__eventKey]
+    local callback = item and item.action and item.action.lua
+    if type(callback) ~= "function" then error("event callback not found") end
+    for k in pairs(__definitions) do __definitions[k] = nil end
+    for k, v in pairs(msg.event or {}) do __definitions[k] = v end
+    return callback()
+  end
+  if type(msg_reply) ~= "table" or type(event) ~= "table" then error("msg_reply and event must be tables") end
+  if msg.__replyKey then
+    local item = msg_reply[msg.__replyKey]
+    local callback = item and item.echo
+    if type(callback) == "table" then callback = callback.lua end
+    if type(callback) ~= "function" then error("reply callback not found") end
+    return callback(msg)
+  end
+  local count = 0
+  local function encode(value, depth)
+    count = count + 1
+    if count > 4096 or depth > 16 then error("reply data limit exceeded") end
+    local kind = type(value)
+    if kind == "function" then return '"__koidice_lua_callback__"' end
+    if kind == "nil" then return "null" end
+    if kind == "boolean" then return tostring(value) end
+    if kind == "number" then
+      if value ~= value or value == math.huge or value == -math.huge then error("invalid reply number") end
+      return tostring(value)
+    end
+    if kind == "string" then
+      return '"' .. value:gsub('[%z\\1-\\31\\\\"]', function(c)
+        if c == '"' or c == string.char(92) then return string.char(92) .. c end
+        return string.char(92) .. string.format('u%04x', string.byte(c))
+      end) .. '"'
+    end
+    if kind ~= "table" then error("unsupported reply data") end
+    local array, n = true, 0
+    for k in pairs(value) do
+      n = n + 1
+      if type(k) ~= "number" or k < 1 or k % 1 ~= 0 then array = false end
+    end
+    local parts = {}
+    if array and n > 0 then
+      for i = 1, n do
+        if value[i] == nil then error("sparse reply array") end
+        parts[#parts + 1] = encode(value[i], depth + 1)
+      end
+      return '[' .. table.concat(parts, ',') .. ']'
+    end
+    for k, v in pairs(value) do
+      if type(k) ~= "string" then error("invalid reply key") end
+      parts[#parts + 1] = encode(k, depth + 1) .. ':' .. encode(v, depth + 1)
+    end
+    return '{' .. table.concat(parts, ',') .. '}'
+  end
+  return encode({ reply = msg_reply, event = event }, 0)
 end`;
 }
 
