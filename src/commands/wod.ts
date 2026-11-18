@@ -2,198 +2,115 @@ import type { Context } from 'koishi';
 import type { RegisterCommand } from '../command-scope';
 import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
-import { logger } from '../index';
 import { CharacterService } from '../services/character-service';
+import { GameSessionService } from '../services/game-session-service';
+import { getObservers } from './observer';
+import { getUserNickname } from './nickname';
 
-/**
- * WOD骰池命令 .w / .ww
- * 用法：
- * .w [骰子个数]a[加骰参数] - 只显示结果
- * .ww [骰子个数]a[加骰参数] - 显示详细
- * .ww 敏捷+剑 - 从人物卡调用属性
- *
- * 固定10面骰，每有一个骰子点数达到加骰参数，则加骰一次
- * 最后计算点数达到8的骰子数
- */
-export function registerWODCommands(
-  register: RegisterCommand,
-  ctx: Context,
-  _config: Config,
-  diceAdapter: DiceAdapter
-) {
-  const characterService = new CharacterService(ctx, diceAdapter);
-
-  // .ww 骰池（显示详细）
-  register('ww [...args:text]', 'WOD骰池（显示详细）')
-    .usage('用法: .ww <骰子数>a<加骰线> 或 .ww <表达式>')
-    .example('.ww 10a8 - 投10个骰子，8点及以上加骰')
-    .example('.ww 敏捷+剑 - 从人物卡调用属性')
-    .action(async ({ session }, ...args) => {
-      if (!session) {
-        return '无法获取会话信息';
-      }
-
-      if (args.length === 0) {
-        return '用法: .ww <骰子数>a<加骰线> 或 .ww <表达式>\n例如: .ww 10a8 或 .ww 敏捷+剑';
-      }
-
-      try {
-        const expression = args.join('');
-        const result = await parseAndRollWOD(
-          expression,
-          session,
-          characterService,
-          diceAdapter,
-          true
-        );
-        return `${session.username} ${result}`;
-      } catch (error) {
-        logger.error('WOD骰池错误:', error);
-        const message = error instanceof Error ? error.message : String(error);
-        return `骰池失败: ${message}`;
-      }
-    });
-
-  // .w 骰池（只显示结果）
-  register('w [...args:text]', 'WOD骰池（只显示结果）')
-    .usage('用法: .w <骰子数>a<加骰线> 或 .w <表达式>')
-    .example('.w 10a8 - 投10个骰子，8点及以上加骰')
-    .example('.w 敏捷+剑 - 从人物卡调用属性')
-    .action(async ({ session }, ...args) => {
-      if (!session) {
-        return '无法获取会话信息';
-      }
-
-      if (args.length === 0) {
-        return '用法: .w <骰子数>a<加骰线> 或 .w <表达式>\n例如: .w 10a8 或 .w 敏捷+剑';
-      }
-
-      try {
-        const expression = args.join('');
-        const result = await parseAndRollWOD(
-          expression,
-          session,
-          characterService,
-          diceAdapter,
-          false
-        );
-        return `${session.username} ${result}`;
-      } catch (error) {
-        logger.error('WOD骰池错误:', error);
-        const message = error instanceof Error ? error.message : String(error);
-        return `骰池失败: ${message}`;
-      }
-    });
+// DicePool treats the first number as a pool, and later bare numbers as modifiers.
+export function rollWOD(expression: string, target: number, maxDice: number, roll: () => number, detailed: boolean): string {
+  const match = /^(-?\d+)(?:[aAdD](\d*))?((?:[+-]\d+(?:[aAdD]\d*)?)*)$/.exec(expression);
+  if (!match) throw new Error('骰池表达式格式错误');
+  let count = Number(match[1]);
+  let again = match[2] === undefined || match[2] === '' ? 10 : Number(match[2]);
+  let extra = 0;
+  for (const term of match[3].matchAll(/([+-])(\d+)(?:[aAdD](\d*))?/g)) {
+    const number = Number(term[2]) * (term[1] === '-' ? -1 : 1);
+    if (term[3] === undefined) extra += number;
+    else {
+      count += number;
+      if (term[3]) again = Number(term[3]);
+    }
+  }
+  if (!Number.isSafeInteger(count) || !Number.isSafeInteger(extra) || !count || Math.abs(count) > maxDice)
+    throw new Error(`骰子数量必须在 1-${maxDice} 之间`);
+  if (again < 5 || again > 11) throw new Error('加骰线必须在5-11之间');
+  let pending = Math.abs(count);
+  let rolled = 0;
+  let successes = extra;
+  const generations: number[][] = [];
+  while (pending) {
+    if (rolled + pending > maxDice) throw new Error(`加骰后骰子数量超过限制 (${maxDice})`);
+    const values: number[] = [];
+    let next = 0;
+    for (let i = 0; i < pending; i++) {
+      const value = roll();
+      values.push(value);
+      if (value >= target) successes++;
+      if (value >= again) next++;
+    }
+    rolled += pending;
+    generations.push(values);
+    pending = next;
+  }
+  const detail = detailed ? ` = ${generations.map((values) => `{${values.join(',')}}`).join('+')}${extra > 0 ? `+${extra}` : extra < 0 ? extra : ''}` : '';
+  return `${expression}${detail} = ${successes}`;
 }
 
-/**
- * 解析并投掷WOD骰池
- */
-async function parseAndRollWOD(
-  expression: string,
-  session: any,
-  characterService: CharacterService,
-  diceAdapter: DiceAdapter,
-  showDetail: boolean
-): Promise<string> {
-  let diceCount = 0;
-  let againLine = 8; // 默认加骰线为8
-
-  // 尝试解析标准格式: 10a8
-  const standardMatch = expression.match(/^(\d+)a(\d+)$/i);
-  if (standardMatch) {
-    const diceCountText = standardMatch[1];
-    const againLineText = standardMatch[2];
-    if (!diceCountText || !againLineText) {
-      throw new Error('表达式格式错误，应为: 骰子数a加骰线，例如: 10a8');
-    }
-    diceCount = parseInt(diceCountText, 10);
-    againLine = parseInt(againLineText, 10);
-  } else {
-    // 尝试从人物卡解析表达式，如 "敏捷+剑"
-    const attributes = await characterService.getAttributes(session, null);
-    if (!attributes) {
-      throw new Error('表达式格式错误，应为: <骰子数>a<加骰线>，例如: 10a8');
-    }
-
-    // 解析表达式中的属性名
-    // 支持 +, -, *, / 运算符
-    let evalExpression = expression;
-
-    // 替换表达式中的属性名为对应的值
-    for (const [attrName, attrValue] of Object.entries(attributes)) {
-      if (typeof attrValue === 'number') {
-        // 使用正则替换，确保完整匹配属性名
-        const regex = new RegExp(attrName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-        evalExpression = evalExpression.replace(regex, attrValue.toString());
-      }
-    }
-
-    // 检查是否还有未替换的中文字符（说明属性不存在）
-    if (/[\u4e00-\u9fa5]/.test(evalExpression)) {
-      throw new Error(`表达式中包含未知属性，请先使用 .st.set 设置属性`);
-    }
-
-    // 计算表达式
-    try {
-      // 使用 WASM 的 roll 函数来计算表达式
-      const calcResult = diceAdapter.roll(evalExpression, 10);
-      if (calcResult.errorCode !== 0) {
-        throw new Error(`表达式计算失败: ${calcResult.errorMsg}`);
-      }
-      diceCount = calcResult.total;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`表达式计算失败: ${message}`);
-    }
-  }
-
-  if (diceCount < 1 || diceCount > 100) {
-    throw new Error('骰子数量必须在1-100之间');
-  }
-
-  if (againLine < 2 || againLine > 10) {
-    throw new Error('加骰线必须在2-10之间');
-  }
-
-  // 投掷骰子
-  const results: number[] = [];
-  let totalDice = diceCount;
-  let successCount = 0;
-
-  for (let i = 0; i < totalDice; i++) {
-    const roll = diceAdapter.roll('1d10', 10);
-    if (roll.errorCode !== 0) {
-      throw new Error(roll.errorMsg);
-    }
-
-    const value = roll.total;
-    results.push(value);
-
-    // 计算成功数（8-10为成功）
-    if (value >= 8) {
-      successCount++;
-    }
-
-    // 加骰
-    if (value >= againLine && totalDice < 100) {
-      totalDice++;
-    }
-  }
-
-  // 格式化输出
-  if (showDetail) {
-    const detailStr = results
-      .map((v) => {
-        if (v >= againLine) return `[${v}!]`; // 加骰
-        if (v >= 8) return `[${v}]`; // 成功
-        if (v === 1) return `(${v})`; // 失败
-        return `${v}`;
-      })
-      .join(' ');
-
-    return `WOD骰池 ${diceCount}a${againLine}:\n${detailStr}\n成功数: ${successCount}`;
-  } else {
-    return `WOD骰池 ${diceCount}a${againLine}: 成功数 ${successCount}`;
+export function registerWODCommands(register: RegisterCommand, ctx: Context, config: Config, diceAdapter: DiceAdapter) {
+  const characters = new CharacterService(ctx, diceAdapter);
+  const games = new GameSessionService(ctx);
+  for (const [name, detailed, hidden] of [['w', false, false], ['ww', true, false], ['wh', false, true], ['wwh', true, true]] as const) {
+    register(`${name} [...args:text]`, 'WOD骰池')
+      .usage(`用法: .${name} [次数#]骰子数a加骰线 [原因]`)
+      .action(async ({ session }, ...args) => {
+        if (!session) return '无法获取会话信息';
+        try {
+          if (config.maxDiceFace < 10) throw new Error('骰子面数超过限制');
+          const raw = args.join(' ').trim();
+          if (!raw) return `用法: .${name} [次数#]骰子数a加骰线 [原因]`;
+          const [input, ...reasonParts] = raw.split(/\s+/);
+          const attributes = await characters.getAttributes(session, null) || {};
+          let expression = input;
+          for (const key of Object.keys(attributes).sort((a, b) => b.length - a.length)) {
+            const value: unknown = attributes[key];
+            if (typeof value === 'number' || typeof value === 'string') expression = expression.split(key).join(String(value));
+          }
+          const attachedReason = /^([\daA+\-#dD]*\d|[\daA+\-#dD]*a)([^\daA+\-#].*)$/.exec(expression);
+          if (attachedReason) {
+            expression = attachedReason[1];
+            reasonParts.unshift(attachedReason[2]);
+          }
+          const repeat = /^(.*?)#(.*)$/.exec(expression);
+          let rounds = 1;
+          if (repeat) {
+            const times = repeat[1] || '1';
+            for (const die of times.matchAll(/(\d*)d(\d*)/gi)) {
+              if (Number(die[1] || 1) > config.maxDiceCount || Number(die[2] || 10) > config.maxDiceFace)
+                throw new Error('掷骰次数表达式超过骰子限制');
+            }
+            const result = diceAdapter.roll(times, 10);
+            if (result.errorCode) throw new Error(result.errorMsg);
+            rounds = result.total;
+            if (!Number.isInteger(rounds) || rounds < 1 || rounds > 10) throw new Error('掷骰次数必须在1-10之间');
+            expression = repeat[2];
+          }
+          const game = await games.getSession(session);
+          const gameConfig = game ? JSON.parse(game.config || '{}') : {};
+          const target = gameConfig.__DPTarget ?? attributes.__DPTarget ?? 8;
+          if (typeof target !== 'number' || !Number.isFinite(target)) throw new Error('骰池成功线无效');
+          const results: string[] = [];
+          for (let i = 0; i < rounds; i++) {
+            results.push(rollWOD(expression, target, config.maxDiceCount, () => {
+              const result = diceAdapter.roll('1d10', 10);
+              if (result.errorCode) throw new Error(result.errorMsg);
+              return result.total;
+            }, detailed && config.showDetail));
+          }
+          const reason = reasonParts.join(' ');
+          const nickname = await getUserNickname(session, ctx);
+          const message = [nickname, reason, ...results].filter(Boolean).join(' ');
+          if (hidden && !session.isDirect && session.guildId) {
+            await session.bot.sendPrivateMessage(session.userId, message);
+            for (const observer of await getObservers(ctx, session)) {
+              if (observer !== session.userId) await session.bot.sendPrivateMessage(observer, message);
+            }
+            return [nickname, '进行了暗骰', reason].filter(Boolean).join(' ');
+          }
+          return message;
+        } catch (error) {
+          return `骰池失败: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      });
   }
 }

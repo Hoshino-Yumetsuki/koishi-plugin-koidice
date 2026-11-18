@@ -22,6 +22,9 @@ import {
   registerGameCommands
 } from './commands/index';
 import { registerExtensionCommands } from './commands/extension';
+import { registerCommunityCommands } from './commands/community';
+import { registerTRPGSystemCommands } from './commands/trpg-systems';
+import { registerTableLinks } from './commands/table-links';
 
 let diceAdapter: DiceAdapter | null = null;
 
@@ -48,9 +51,23 @@ export async function registerCommands(
     throw new Error('Dice adapter not initialized');
   }
 
-  const register = createCommandRegistrar(ctx, config.diceStyleCommands);
-  registerDeckCommands(register, config, diceAdapter);
-  registerAttributeCharacterCommands(register, ctx, diceAdapter, extensionService || undefined);
+  const { register, listCommands } = createCommandRegistrar(ctx, config.diceStyleCommands);
+  const listDecks = registerDeckCommands(register, ctx, config, diceAdapter);
+  registerCommunityCommands(register, ctx, {
+    diceStyle: config.diceStyleCommands,
+    listCommands, listDecks,
+    listReplies: () => (extensionService?.listPlugins() ?? []).flatMap(plugin =>
+      [...plugin.commands].flatMap(([name, reply]) => {
+        if (!['reply', 'both'].includes((reply.type || 'reply').toLowerCase())) return [];
+        const triggers: string[] = Object.values(reply.keyword || {}).flat();
+        return triggers.length ? triggers : [name];
+      }))
+  });
+  registerTableLinks(register, ctx);
+  registerTRPGSystemCommands(register, ctx, config, diceAdapter);
+  if (config.enableCharacterCard) {
+    registerAttributeCharacterCommands(register, ctx, diceAdapter, extensionService || undefined, config);
+  }
   registerRollCommand(register, ctx, config, diceAdapter);
   registerNicknameCommands(register, ctx, config, diceAdapter);
   registerAnkoCommands(register, ctx, config);
@@ -68,7 +85,7 @@ export async function registerCommands(
 
   registerInitiativeCommands(register, ctx, config, diceAdapter);
   registerSettingsCommands(register, ctx, config, diceAdapter);
-  registerObserverCommands(register, ctx, config, diceAdapter);
+  registerObserverCommands(register, ctx);
   registerWODCommands(register, ctx, config, diceAdapter);
   registerRuleCommands(register, config, diceAdapter, ctx, extensionService);
 

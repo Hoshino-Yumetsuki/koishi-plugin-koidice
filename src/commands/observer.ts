@@ -1,272 +1,61 @@
-import type { Context } from 'koishi';
+import type { Context, Session } from 'koishi';
 import type { RegisterCommand } from '../command-scope';
-import type { Config } from '../config';
-import type { DiceAdapter } from '../wasm';
-import { logger } from '../index';
+import { GameSessionService } from '../services/game-session-service';
 
-/**
- * 获取频道的旁观者列表
- */
-export async function getObservers(
-  ctx: Context,
-  channelId: string,
-  platform: string
-): Promise<string[]> {
-  try {
-    const records = await ctx.database.get('koidice_observer', {
-      channelId,
-      platform
-    });
-    return records.map((r) => r.userId);
-  } catch (error) {
-    logger.error('获取旁观者列表失败:', error);
-    return [];
-  }
+function userIds(data: string): string[] {
+  const ids: unknown = JSON.parse(data || '[]');
+  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
 }
 
-/**
- * 检查旁观模式是否开启
- */
-async function isObserverModeEnabled(
-  ctx: Context,
-  channelId: string,
-  platform: string
-): Promise<boolean> {
-  try {
-    const records = await ctx.database.get('koidice_observer', {
-      channelId,
-      platform,
-      userId: '__mode__' // 特殊标记，用于存储模式状态
-    });
-    return records[0]?.isEnabled ?? false;
-  } catch (error) {
-    logger.error('检查旁观模式失败:', error);
-    return false;
-  }
+/** Hidden results go to the GM and observers, never to a mode marker or an unrelated table. */
+export async function getObservers(ctx: Context, session: Session) {
+  if (session.isDirect) return [];
+  const service = new GameSessionService(ctx);
+  const game = await service.getSession(session);
+  if (!game) return [];
+  const observers = await service.getConfig(game.id, 'no_ob') ? [] : userIds(game.observerList);
+  return [...new Set([...userIds(game.gmList), ...observers])];
 }
 
-/**
- * 设置旁观模式
- */
-async function setObserverMode(
-  ctx: Context,
-  channelId: string,
-  platform: string,
-  enabled: boolean
-): Promise<void> {
-  try {
-    const existing = await ctx.database.get('koidice_observer', {
-      channelId,
-      platform,
-      userId: '__mode__'
-    });
-
-    if (existing.length > 0) {
-      await ctx.database.set(
-        'koidice_observer',
-        { channelId, platform, userId: '__mode__' },
-        { isEnabled: enabled }
-      );
-    } else {
-      await ctx.database.create('koidice_observer', {
-        channelId,
-        platform,
-        userId: '__mode__',
-        isEnabled: enabled,
-        createdAt: new Date()
-      });
-    }
-  } catch (error) {
-    logger.error('设置旁观模式失败:', error);
-  }
+export async function sendHidden(ctx: Context, session: Session, detail: string) {
+  const recipients = new Set([session.userId!, ...await getObservers(ctx, session)]);
+  await Promise.all([...recipients].map(async id => {
+    try { await session.bot.sendPrivateMessage(id, detail); }
+    catch (error) { ctx.logger('koidice').warn('私发暗骰结果失败:', error); }
+  }));
 }
 
-/**
- * 添加旁观者
- */
-async function addObserver(
-  ctx: Context,
-  channelId: string,
-  platform: string,
-  userId: string
-): Promise<boolean> {
-  try {
-    const existing = await ctx.database.get('koidice_observer', {
-      channelId,
-      platform,
-      userId
-    });
-
-    if (existing.length === 0) {
-      await ctx.database.create('koidice_observer', {
-        channelId,
-        platform,
-        userId,
-        isEnabled: false,
-        createdAt: new Date()
-      });
-    }
-    return true;
-  } catch (error) {
-    logger.error('添加旁观者失败:', error);
-    return false;
-  }
-}
-
-/**
- * 移除旁观者
- */
-async function removeObserver(
-  ctx: Context,
-  channelId: string,
-  platform: string,
-  userId: string
-): Promise<boolean> {
-  try {
-    const result = await ctx.database.remove('koidice_observer', {
-      channelId,
-      platform,
-      userId
-    });
-    return (result.matched ?? 0) > 0;
-  } catch (error) {
-    logger.error('移除旁观者失败:', error);
-    return false;
-  }
-}
-
-/**
- * 清空频道的所有旁观者
- */
-async function clearObservers(ctx: Context, channelId: string, platform: string): Promise<void> {
-  try {
-    await ctx.database.remove('koidice_observer', {
-      channelId,
-      platform
-    });
-  } catch (error) {
-    logger.error('清空旁观者失败:', error);
-  }
-}
-
-/**
- * 旁观模式命令 .ob
- */
-export function registerObserverCommands(
-  register: RegisterCommand,
-  ctx: Context,
-  _config: Config,
-  _diceAdapter: DiceAdapter
-) {
-  register('ob [action:text]', '旁观模式').action(async ({ session }, action) => {
-    if (!session) {
-      return '无法获取会话信息';
-    }
-
-    const channelId = session.channelId;
-    const userId = session.userId;
-
-    if (!channelId) {
-      return '旁观模式仅在群聊中可用';
-    }
-    if (!userId) {
-      return '无法获取用户信息';
-    }
-
-    try {
-      if (!action) {
-        return (
-          '用法:\n' +
-          '.ob join - 加入旁观\n' +
-          '.ob exit - 退出旁观\n' +
-          '.ob list - 查看旁观者\n' +
-          '.ob clr - 清除所有旁观者\n' +
-          '.ob on/off - 开启/关闭旁观模式'
-        );
+export function registerObserverCommands(register: RegisterCommand, ctx: Context) {
+  const games = new GameSessionService(ctx);
+  register('ob [action:string]', '旁观模式').userFields(['authority']).action(async ({ session }, action) => {
+    if (!session?.userId || session.isDirect) return '旁观模式仅在群聊中可用';
+    const op = action?.toLowerCase() || 'join';
+    const game = op === 'join' ? await games.getOrCreateForArea(session) : await games.getSession(session);
+    if (!game) return '当前窗口没有游戏';
+    const uid = session.userId;
+    const host = (session.user?.authority ?? 0) >= 3 || session.event.member?.roles?.some(role => role.id === 'owner' || role.id === 'admin');
+    switch (op) {
+      case 'join':
+        if (await games.getConfig(game.id, 'no_ob')) return '本桌旁观模式已关闭';
+        return await games.addObserver(game.id, uid) ? `${session.username} 已加入旁观` : '你已经在旁观列表中';
+      case 'exit':
+        return await games.removeObserver(game.id, uid) ? `${session.username} 已退出旁观` : '你不在旁观列表中';
+      case 'list': {
+        const ids = userIds(game.observerList);
+        return ids.length ? `旁观者列表：${ids.join('、')}` : '当前没有旁观者';
       }
-
-      const lowerAction = action.toLowerCase();
-
-      switch (lowerAction) {
-        case 'join': {
-          const modeEnabled = await isObserverModeEnabled(ctx, channelId, session.platform);
-          if (!modeEnabled) {
-            return '本桌旁观模式未开启';
-          }
-
-          await addObserver(ctx, channelId, session.platform, userId);
-          return `${session.username} 已加入旁观`;
-        }
-
-        case 'exit': {
-          const removed = await removeObserver(ctx, channelId, session.platform, userId);
-          if (!removed) {
-            return '你不在旁观列表中';
-          }
-          return `${session.username} 已退出旁观`;
-        }
-
-        case 'list': {
-          const channelObservers = await getObservers(ctx, channelId, session.platform);
-          if (channelObservers.length === 0) {
-            return '当前没有旁观者';
-          }
-          return `旁观者列表:\n${channelObservers.map((id, i) => `${i + 1}. ${id}`).join('\n')}`;
-        }
-
-        case 'clr':
-        case 'clear': {
-          await clearObservers(ctx, channelId, session.platform);
-          return '已清除所有旁观者';
-        }
-
-        case 'on': {
-          await setObserverMode(ctx, channelId, session.platform, true);
-          return '已开启旁观模式';
-        }
-
-        case 'off': {
-          await setObserverMode(ctx, channelId, session.platform, false);
-          await clearObservers(ctx, channelId, session.platform);
-          return '已关闭旁观模式';
-        }
-
-        default:
-          return '未知操作 使用 .ob 查看帮助';
-      }
-    } catch (error) {
-      logger.error('旁观模式错误:', error);
-      return '操作失败';
+      case 'clr':
+      case 'clear':
+        if (!host && !games.isGM(game, uid)) return '需要群管理员或 GM 权限';
+        await ctx.database.set('koidice_game_session', { id: game.id }, { observerList: '[]' });
+        return '已清除所有旁观者';
+      case 'on':
+      case 'off':
+        if (!host) return '需要群管理员权限';
+        await games.setConfig(game.id, 'no_ob', op === 'off');
+        return op === 'on' ? '已开启旁观模式' : '已关闭旁观模式';
+      default:
+        return '用法：.ob join/exit/list/clr/on/off';
     }
   });
-}
-
-/**
- * 检查用户是否为旁观者
- */
-export async function isObserver(
-  ctx: Context,
-  channelId: string,
-  platform: string,
-  userId: string
-): Promise<boolean> {
-  try {
-    const records = await ctx.database.get('koidice_observer', {
-      channelId,
-      platform,
-      userId
-    });
-    return records.length > 0;
-  } catch (error) {
-    logger.error('检查旁观者失败:', error);
-    return false;
-  }
-}
-
-/**
- * 清理所有旁观者数据 (插件卸载时调用)
- */
-export function clearAllObservers(): void {
-  // 数据库持久化，不需要清理
-  logger.debug('旁观者数据已持久化到数据库');
 }

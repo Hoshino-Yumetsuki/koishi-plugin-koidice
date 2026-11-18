@@ -1,7 +1,6 @@
 import { type Context, Logger } from 'koishi';
 import type { Config } from './config';
 import { initializeDiceAdapter, registerCommands } from './commands';
-import { clearAllObservers } from './commands/observer';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +14,7 @@ export const version = packageJson.version;
 import { getDataPath } from './utils/path';
 import { createLogger, setLoggerLevel } from './utils/logger';
 
-export let logger: Logger;
+export let logger: Logger = new Logger('koidice');
 
 export const inject = {
   required: ['database']
@@ -66,8 +65,6 @@ export async function apply(ctx: Context, config: Config) {
     try {
       extensionService?.dispose();
       diceAdapter?.cleanupExtensions();
-      clearAllObservers();
-      logger.debug('已清理扩展及旁观者数据');
       logger.info('Dice 插件卸载完成');
     } catch (error) {
       logger.error('插件卸载时发生错误:', error);

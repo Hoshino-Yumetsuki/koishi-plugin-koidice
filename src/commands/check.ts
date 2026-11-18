@@ -4,17 +4,17 @@ import type { Config } from '../config';
 import type { DiceAdapter } from '../wasm';
 import { logger } from '../index';
 import { CharacterService } from '../services/character-service';
+import { getCOCRule } from './settings';
+import { GameSessionService } from '../services/game-session-service';
+import { getUserNickname } from './nickname';
+import { sendHidden } from './observer';
+import { recordDiceStatistics } from '../services/character/card-stats';
 
-/**
- * 通用检定命令 .rc/.ra
- * 支持格式:
- * .rc 技能名 成功率 - 基础检定
- * .rc 困难技能名 成功率 - 困难检定（成功率/2）
- * .rc 极难技能名 成功率 - 极难检定（成功率/5）
- * .rc3#技能名 成功率 - 3轮检定
- * .rc3#p技能名 成功率 - 3轮带惩罚骰
- * .rc3#b技能名 成功率 - 3轮带奖励骰
- */
+
+// Dice! applies multiplication, signed adjustments, then division before difficulty.
+const checkArgs = /^(?:(\d+)#)?\s*(?:([bp])(\d*)(?![a-z]))?\s*(_?)\s*(.*)$/iu;
+const skillArgs = /^(自动成功)?(简单|困难|极难|极限)?\s*([^\s\d*+\-/=:]*)(?:\*(\d+))?((?:[+-]\d+)*)(?:\/(\d+))?\s*[:=]?\s*(\d+)?(?:\s+(.*))?$/u;
+
 export function registerCheckCommand(
   register: RegisterCommand,
   ctx: Context,
@@ -23,7 +23,8 @@ export function registerCheckCommand(
 ) {
   const characterService = new CharacterService(ctx, diceAdapter);
 
-  register('rc [expression:text]', '技能检定', 'ra', 'check')
+  for (const hidden of [false, true]) {
+  register(hidden ? 'rch [expression:text]' : 'rc [expression:text]', '技能检定', ...(hidden ? ['rah'] : ['ra', 'check']))
     .action(async ({ session }, expression) => {
       if (!session) {
         return '无法获取会话信息';
@@ -37,35 +38,62 @@ export function registerCheckCommand(
       }
 
       try {
-        // 检查是否需要从人物卡获取技能值
-        let finalExpression = expression;
-        const spaceIndex = expression.lastIndexOf(' ');
+        const args = checkArgs.exec(expression.trim());
+        if (!args) return '检定表达式无效';
+        const [, repeat, mode, bonus, hide, body] = args;
+        const isHidden = hidden || !!hide;
+        const rounds = Number(repeat ?? 1);
+        if (rounds < 1 || rounds > 9 || (mode && (Number(bonus || 1) < 1 || Number(bonus || 1) > 9))) return '检定轮数及奖惩骰数量必须在1-9之间';
 
-        if (spaceIndex === -1 || Number.isNaN(Number(expression.substring(spaceIndex + 1)))) {
-          // 提取技能名（去除难度前缀和轮数前缀）
-          let skillName = expression;
-          skillName = skillName.replace(/^\d+#[pb]?/, '');
-          skillName = skillName.replace(/^(困难|极难|自动成功)/, '');
-          skillName = skillName.trim();
-
-          // 从人物卡获取技能值
-          const attributes = await characterService.getAttributes(session, null);
-          if (attributes && skillName in attributes) {
-            const skillValue = attributes[skillName];
-            finalExpression = `${expression} ${skillValue}`;
-          } else {
-            return `未找到技能 ${skillName}，请指定成功率或先使用 .st.set ${skillName} <值> 设置`;
-          }
+        let subject = body;
+        let card = await characterService.getActiveCard(session);
+        const named = /^([^:\s]+?)(::?|的)(.+)$/u.exec(body);
+        if (named && !(named[2] === ':' && /^\d/.test(named[3]))) {
+          const selected = await characterService.getCard(session, named[1]);
+          if (selected) { card = selected; subject = named[3]; }
+          else if (named[2] !== '的') return `人物卡 ${named[1]} 不存在`;
         }
-
-        const result = diceAdapter.processCheck(finalExpression, session.userId, 0);
+        const parsed = skillArgs.exec(subject.trim());
+        if (!parsed) return '检定表达式无效';
+        const [, automatic, difficulty, skill, multiple, adjustments, divisor, explicit, reason] = parsed;
+        if (!skill && explicit === undefined) return '请指定技能或成功率';
+        let base = explicit === undefined ? undefined : Number(explicit);
+        if (base === undefined) {
+          if (card) {
+            const attributes = typeof card.attributes === 'string' ? JSON.parse(card.attributes) : card.attributes;
+            const value = attributes[diceAdapter.normalizeAttributeName(skill)];
+            if (typeof value === 'number') base = value;
+          }
+          if (base === undefined && (!card || /^COC[67]$/i.test(card.cardType))) base = diceAdapter.defaultSkillValue(skill);
+          if (base === undefined || base < 0) return `未找到技能 ${skill}，请指定成功率或先使用 .st ${skill} <值> 设置`;
+        }
+        let add = 0;
+        for (const [term] of adjustments.matchAll(/[+-]\d+/g)) add += Number(term);
+        const rate = Math.trunc(((base * Number(multiple ?? 1) + add) * (difficulty === '简单' ? 2 : 1)) / Number(divisor ?? 1));
+        if (!Number.isSafeInteger(rate) || rate < 0 || rate > 1000) return '检定成功率必须在0-1000之间';
+        const rule = await getCOCRule(ctx, session);
+        const finalExpression = `${rounds}#${mode || ''}${bonus || ''}${automatic || ''}${difficulty === '简单' ? '' : difficulty || ''}检定 ${rate}`;
+        const rolls = await new GameSessionService(ctx).drawRouletteBatch(session, Array(rounds).fill(100), diceAdapter);
+        const result = rolls.some((value) => value !== undefined)
+          ? diceAdapter.processCheckWithRolls(finalExpression, session.userId, rule, rolls.map((value) => value ?? 0))
+          : diceAdapter.processCheck(finalExpression, session.userId, rule);
 
         if (!result.success) {
           return result.errorMsg || '检定失败';
         }
+        if (card) {
+          const keys = ['fumble', 'failure', 'regularSuccess', 'hardSuccess', 'extremeSuccess', 'criticalSuccess'] as const;
+          const stats: Record<string, number> = { totalRolls: result.results.length };
+          for (const round of result.results) {
+            const key = keys[round.successLevel];
+            if (key) stats[key] = (stats[key] || 0) + 1;
+            if (!mode) await recordDiceStatistics(ctx, session, card.cardName, card.id, 100, [round.rollValue], { rate: result.finalSkillValue, result: round.rollValue });
+          }
+          await characterService.updateStats(session, card.cardName, stats);
+        }
 
         // 格式化输出
-        const parts = [session.username, result.skillName];
+        const parts = [await getUserNickname(session, ctx), reason, `${skill || '检定'}${multiple ? `*${multiple}` : ''}${adjustments}${divisor ? `/${divisor}` : ''}`].filter(Boolean);
 
         if (result.rounds === 1) {
           const r = result.results[0];
@@ -93,10 +121,16 @@ export function registerCheckCommand(
           parts.push(roundResults.join(' '));
         }
 
-        return parts.join(' ');
+        const message = parts.join(' ');
+        if (isHidden && !session.isDirect && session.guildId) {
+          await sendHidden(ctx, session, message);
+          return `${parts[0]} 进行了暗中检定`;
+        }
+        return message;
       } catch (error) {
         logger.error('技能检定错误:', error);
         return '检定时发生错误';
       }
     });
+  }
 }
