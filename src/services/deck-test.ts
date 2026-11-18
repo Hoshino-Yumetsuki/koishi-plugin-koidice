@@ -15,30 +15,12 @@ test('deck draws without replacement and respects public weights', () => {
   assert.deepEqual(drawDeck(custom, 10, adapter).sort(), ['literal', 'literal', '{x}'].sort());
 });
 
-test('deck scopes distinguish platforms, groups and private users', () => {
+test('deck storage keys isolate groups, private users, games and platforms', () => {
   const group = { platform: 'test', guildId: '1', channelId: '2', isDirect: false };
   assert.notEqual(deckScope(group as unknown as Session), deckScope({ ...group, isDirect: true, userId: '1' } as unknown as Session));
   assert.notEqual(deckScope(group as unknown as Session), deckScope({ ...group, platform: 'other' } as unknown as Session));
-});
-
-test('linked rooms share game decks while other games and platforms stay isolated', async () => {
-  const rows = new Map<string, string>();
-  const database = {
-    async get(_table: string, query: { scope: string }) { const data = rows.get(query.scope); return data ? [{ data }] : []; },
-    async set(_table: string, query: { scope: string }, value: { data: string }) { rows.set(query.scope, value.data); },
-    async create(_table: string, value: { scope: string; data: string }) { rows.set(value.scope, value.data); }
-  };
-  const service = new DeckService({ database } as unknown as Context);
-  const firstRoom = gameDeckScope('test', 42);
-  const linkedRoom = gameDeckScope('test', 42);
-  await service.transact(firstRoom, async (decks) => {
-    decks.shared = makeDeck(['one'], false, adapter);
-    return { result: null, changed: true };
-  });
-  const read = (scope: string) => service.transact(scope, async (decks) => ({ result: Object.keys(decks), changed: false }));
-  assert.deepEqual(await read(linkedRoom), ['shared']);
-  assert.deepEqual(await read(gameDeckScope('test', 43)), []);
-  assert.deepEqual(await read(gameDeckScope('other', 42)), []);
+  assert.notEqual(gameDeckScope('test', 42), gameDeckScope('test', 43));
+  assert.notEqual(gameDeckScope('test', 42), gameDeckScope('other', 42));
 });
 
 test('concurrent transactions retain both mutations', async () => {

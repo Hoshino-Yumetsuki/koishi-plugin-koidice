@@ -1,6 +1,6 @@
 // Run with: bun src/commands/table-links-test.mjs
 import { strict as assert } from 'node:assert';
-import { registerTableLinks, tableChannelCommandsEnabled } from './table-links.ts';
+import { registerTableLinks } from './table-links.ts';
 
 const tables = new Map();
 const commands = new Map();
@@ -36,7 +36,7 @@ await message(user, 'hello');
 assert.equal(sent.length, 0);
 await command(b, 'link', 'with', 'ga');
 await message(user, 'hello');
-assert.equal(sent.length, 1);
+assert.deepEqual(sent.splice(0), ['b:[链接消息] hello']);
 await message(session('a', 'other'), 'hello');
 await message(user, '.r 1d20');
 await message(user, '．rh 私下调查');
@@ -45,16 +45,12 @@ await message(user, 'hello', [{ type: 'at' }]);
 await message(user, 'password 123');
 await message(user, '[链接消息] hello');
 await message({ ...user, isDirect: true }, 'hello');
-assert.equal(sent.length, 1);
+assert.equal(sent.length, 0);
 await command(user, 'link', 'optout');
 await message(user, 'hello');
-assert.equal(sent.length, 1);
-await command(user, 'link', 'say', 'hello');
-assert.equal(sent.length, 2);
+assert.equal(sent.length, 0);
+await command(user, 'link', 'say', 'manual');
+assert.deepEqual(sent.splice(0), ['b:[链接消息] manual']);
 await command(b, 'link', 'close');
 await command(user, 'link', 'say', 'hello');
-assert.equal(sent.length, 2);
-await command(a, 'chan', 'off');
-assert.equal(await tableChannelCommandsEnabled(ctx, a), false);
-await command(a, 'chan', 'on');
-assert.equal(await tableChannelCommandsEnabled(ctx, a), true);
+assert.equal(sent.length, 0);

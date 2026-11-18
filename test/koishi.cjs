@@ -41,16 +41,21 @@ for (const diceStyleCommands of [false, true]) {
     await send('set 20');
     assert.match(await send('r'), /1D20/i);
     assert.match(await send('ra 50'), /\/50/);
-    assert.match(await send('sc0/0 70'), /70/);
+    assert.match(await send('sc1/1 70'), /70\s*→\s*69\b/);
     for (const command of ['ti', 'li']) {
       const symptom = await send(command);
-      assert.match(symptom, command === 'ti' ? /临时疯狂症状/ : /永久\/不定疯狂症状/);
+      assert.match(symptom, command === 'ti' ? /\b(?:10|[1-9])轮/u : /\b(?:10|[1-9])小时/u);
       assert.doesNotMatch(symptom, /\{(?:dur|pc|nick|detail_roll|detail)\}/);
     }
     assert.match(await send('r1d1# 采样'), /采样.*1D20/i);
     assert.match(await send('r4df'), /4DF=/i);
     assert.match(await send('rc 侦察'), /\/25\b/);
-    assert.equal((await send('coc6s2')).match(/资产:/g)?.length, 2);
+    const investigators = [...(await send('coc6s2')).matchAll(/力量:(\d+)[^\n]*资产:(\d+)/g)];
+    assert.equal(investigators.length, 2);
+    for (const [, strength, assets] of investigators) {
+      assert.ok(Number(strength) >= 3 && Number(strength) <= 18);
+      assert.ok(Number(assets) >= 1 && Number(assets) <= 10);
+    }
     assert.match(await send('coc11'), /1-10/);
     if (diceStyleCommands) assert.match((await gm.receive('．r1d1'))[0], /1D1=1/i);
     await send('pc new Investigator');
@@ -59,10 +64,14 @@ for (const diceStyleCommands of [false, true]) {
     const sheet = await send('pc show Investigator');
     assert.match(sheet, /力量: 61\b/);
     assert.match(sheet, /教育: \d+/);
-    assert.match(await send('pc new Example:pc:Hero'), /力量=40.*体力=20/s);
-    assert.doesNotMatch(await send('pc new Example:missing:Invalid'), /已创建/);
+    await send('pc new Example:pc:Hero');
+    assert.match(await send('pc new Example:missing:Invalid'), /missing/);
+    assert.match(await send('pc show Invalid'), /不存在/);
     assert.match(await send('pc type'), /Example/);
-    assert.match(await send('pc tojson'), /"体力"\s*:\s*20/);
+    const exported = JSON.parse(await send('pc tojson'));
+    assert.equal(exported.__Name, 'Hero');
+    assert.equal(exported.力量, 40);
+    assert.equal(exported.体力, 20);
     assert.match(await send('rc Investigator::力量+9/2 搜索'), /搜索.*\/35\b/);
     assert.match(await send('rc 简单力量'), /\/80\b/);
     await send('set 1');
@@ -77,8 +86,27 @@ for (const diceStyleCommands of [false, true]) {
     assert.match(await send('r1d2+0d2'), /为0/);
     assert.match(await send('r2d2+1'), /=4\b/);
     assert.match(await send('game rou hist'), /D2: (?:1 2|2 1)\b/);
+    await app.mock.initChannel('annex');
+    const annex = app.mock.client('101', 'annex');
+    annex.event.member = { roles: [{ id: 'admin' }] };
+    await send('game new Other', annex);
+    await send('deck new map=钟楼');
     await send('ri 80 Boss');
-    assert.match(await send('init'), /Boss: 80\b/);
+    assert.match(await send('draw map', annex), /不存在/);
+    assert.match(await send('init', annex), /没有/);
+    await send('game close', annex);
+    await send('game open Delta', annex);
+    assert.match(await send('draw map', annex), /钟楼/);
+    assert.match(await send('draw map'), /已空/);
+    assert.match(await send('init', annex), /Boss: 80\b/);
+    await send('ri +5 3#wolf', annex);
+    assert.match(await send('init list'), /wolf3:/);
+    await send('ri -30 Scout', annex);
+    const score = /Scout: (-?\d+)/.exec(await send('init list'));
+    assert.ok(score && Number(score[1]) >= -29 && Number(score[1]) <= -10, '先攻应为 1D20 - 30');
+    assert.match(await send('ri +5 11#wolf'), /1-10/);
+    await send('init clr', annex);
+    assert.match(await send('init'), /没有/);
 
     await send('nn Alice');
     const tiles = (await send('draw 麻将牌 136')).split('抽取了: ')[1].split(' | ');
@@ -103,6 +131,11 @@ for (const diceStyleCommands of [false, true]) {
     assert.equal(await send('draw clue'), '');
     await send('chan.settings draw on');
     assert.match(await send('draw clue'), /空/);
+    await send('chan off');
+    assert.equal(await send('r1d1'), '');
+    assert.match(await send('r1d1', annex), /1D1=1/i);
+    await send('chan on');
+    assert.match(await send('r1d1'), /1D1=1/i);
     assert.equal(await send('dismiss'), '');
     assert.equal(await send('group diver'), '');
 
