@@ -4,6 +4,7 @@ export interface Config {
   // 基础设置
   defaultDice: number;
   diceStyleCommands: boolean;
+  ruleEndpoint?: string;
   enableCOC: boolean;
   enableDND: boolean;
   enableCustomDeck: boolean;
@@ -29,6 +30,8 @@ export const Config: Schema<Config> = Schema.intersect([
     diceStyleCommands: Schema.boolean()
       .default(false)
       .description('使用 Dice! 风格命令（如 .r），不注册 koidice 和 koid 前缀'),
+
+    ruleEndpoint: Schema.string().role('link').description('可选的 HTTPS 规则查询地址。留空时仅查询本地规则；启用后将发送未命中的规则名和词条。'),
 
     enableCOC: Schema.boolean().default(true).description('启用COC规则支持'),
 

@@ -8,7 +8,7 @@ import { logger } from '../../index';
 export async function loadRulebooks(
   rulebookDir: string,
   pluginName: string,
-  pluginRules: Map<string, any>
+  pluginRules: Map<string, Record<string, string>>
 ): Promise<void> {
   logger.debug(`Scanning rulebook directory: ${rulebookDir}`);
   const yaml = await import('js-yaml');
@@ -21,19 +21,15 @@ export async function loadRulebooks(
     try {
       const filePath = path.join(rulebookDir, file);
       const content = await fs.readFile(filePath, 'utf-8');
-      const ruleData = yaml.load(content) as any;
-
-      if (ruleData?.rule && ruleData.manual) {
-        const ruleName = ruleData.rule;
-        logger.info(`Loading rulebook: ${ruleName} from ${pluginName}`);
-
-        // 将规则注入到规则缓存中
-        pluginRules.set(ruleName, ruleData.manual);
-
-        logger.info(
-          `Loaded rulebook: ${ruleName} with ${Object.keys(ruleData.manual).length} entries`
-        );
+      const ruleData = yaml.load(content);
+      if (!ruleData || typeof ruleData !== 'object' || !('rule' in ruleData) || !('manual' in ruleData)) continue;
+      if (typeof ruleData.rule !== 'string' || !ruleData.manual || typeof ruleData.manual !== 'object' || Array.isArray(ruleData.manual)) continue;
+      const manual: Record<string, string> = {};
+      for (const [key, value] of Object.entries(ruleData.manual)) {
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') manual[key] = String(value);
       }
+      pluginRules.set(ruleData.rule, { ...pluginRules.get(ruleData.rule), ...manual });
+      logger.info(`Loaded rulebook: ${ruleData.rule} from ${pluginName} with ${Object.keys(manual).length} entries`);
     } catch (error) {
       logger.error(`Error loading rulebook ${file}:`, error);
     }
