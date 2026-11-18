@@ -3,10 +3,44 @@
 #include "check_handler.h"
 #include "utils.h"
 #include "utf8_utils.h"
+#include "../../../Dice/Dice/RD.h"
+#include "../../../Dice/Dice/Jsonio.h"
 #include <regex>
 #include <sstream>
 
 namespace koidice {
+
+namespace {
+std::shared_ptr<DiceSession> loadRoulette(const nlohmann::json& state) {
+    auto game = std::make_shared<DiceSession>("koishi-roll");
+    for (const auto& entry : state.items()) {
+        const auto& data = entry.value();
+        const auto face = data.at("face").get<size_t>();
+        const auto copy = data.at("copy").get<size_t>();
+        auto& wheel = game->roulette[face];
+        wheel.face = face;
+        wheel.copy = copy;
+        data.at("pool").get_to(wheel.pool);
+        data.at("sizRes").get_to(wheel.sizRes);
+        if (!face || face > 100 || !copy || copy > 100 / face || wheel.pool.size() != face * copy || wheel.sizRes > wheel.pool.size()) {
+            throw std::invalid_argument("轮盘骰记录无效");
+        }
+    }
+    return game;
+}
+
+void saveRoulette(nlohmann::json& state, const DiceSession& game, emscripten::val& result) {
+    bool changed = false;
+    for (const auto& [face, wheel] : game.roulette) {
+        auto& data = state.at(std::to_string(face));
+        if (data["sizRes"] == wheel.sizRes && data["pool"] == wheel.pool) continue;
+        data["sizRes"] = wheel.sizRes;
+        data["pool"] = wheel.pool;
+        changed = true;
+    }
+    if (changed) result.set("roulette", state.dump());
+}
+}
 
 emscripten::val CommandProcessor::processRoll(
     const std::string& rawCommand,
@@ -16,6 +50,10 @@ emscripten::val CommandProcessor::processRoll(
     bool isSimple,
     int defaultDice
 ) {
+    return processTableRoll(rawCommand, isHidden, isSimple, defaultDice, {});
+}
+
+emscripten::val CommandProcessor::processTableRoll(const std::string& rawCommand, bool isHidden, bool isSimple, int defaultDice, const std::string& roulette) {
     ensureRandomInit();
 
     std::string expression;
@@ -24,15 +62,48 @@ emscripten::val CommandProcessor::processRoll(
 
     // 解析命令
     parseRollExpression(rawCommand, expression, reason, rounds, defaultDice);
+    if (rounds < 1 || rounds > 10) {
+        emscripten::val result = emscripten::val::object();
+        result.set("success", false);
+        result.set("errorMsg", "掷骰轮数必须在1-10之间");
+        return result;
+    }
 
-    // 调用掷骰处理器
-    return RollHandler::roll(expression, reason, rounds, isHidden, isSimple, defaultDice);
+    if (roulette.empty() || roulette == "{}") return RollHandler::roll(expression, reason, rounds, isHidden, isSimple, defaultDice);
+    auto state = nlohmann::json::parse(roulette);
+    auto game = loadRoulette(state);
+    auto result = RollHandler::roll(expression, reason, rounds, isHidden, isSimple, defaultDice, game);
+    if (result["success"].as<bool>()) saveRoulette(state, *game, result);
+    return result;
+}
+
+emscripten::val CommandProcessor::drawRouletteBatch(const std::string& roulette, emscripten::val faces) {
+    ensureRandomInit();
+    auto state = nlohmann::json::parse(roulette.empty() ? "{}" : roulette);
+    auto game = loadRoulette(state);
+    auto result = emscripten::val::object();
+    auto rolls = emscripten::val::array();
+    const auto length = faces["length"].as<unsigned>();
+    for (unsigned i = 0; i < length; ++i) {
+        const auto face = faces[i].as<size_t>();
+        if (game->roulette.count(face)) rolls.call<void>("push", game->roulette[face].roll());
+        else rolls.call<void>("push", emscripten::val::undefined());
+    }
+    result.set("rolls", rolls);
+    saveRoulette(state, *game, result);
+    return result;
 }
 
 emscripten::val CommandProcessor::processCheck(
     const std::string& rawCommand,
     const std::string& userId,
     int rule
+) {
+    return processCheckWithRolls(rawCommand, userId, rule, emscripten::val::undefined());
+}
+
+emscripten::val CommandProcessor::processCheckWithRolls(
+    const std::string& rawCommand, const std::string& userId, int rule, emscripten::val rolls
 ) {
     ensureRandomInit();
 
@@ -47,7 +118,7 @@ emscripten::val CommandProcessor::processCheck(
     parseCheckExpression(rawCommand, skillName, skillValue, rounds, bonusDice, difficulty, autoSuccess);
 
     // 调用检定处理器
-    return CheckHandler::check(skillName, skillValue, rounds, bonusDice, difficulty, autoSuccess, rule);
+    return CheckHandler::check(skillName, skillValue, rounds, bonusDice, difficulty, autoSuccess, rule, rolls);
 }
 
 emscripten::val CommandProcessor::processCOCCheck(int skillValue, int bonusDice) {
@@ -71,20 +142,18 @@ void CommandProcessor::parseRollExpression(
         return;
     }
 
-    // 解析多轮掷骰：3#1d6
-    std::regex roundsRegex(R"(^(\d+)#(.+)$)");
+    std::regex roundsRegex(R"(^([\dDd+\-*/xX()]+)#(.*)$)");
     std::smatch match;
-
     if (std::regex_match(trimmedInput, match, roundsRegex)) {
-        rounds = std::stoi(match[1].str());
-        if (rounds > 10) rounds = 10;
-        if (rounds < 1) rounds = 1;
-        trimmedInput = match[2].str();
+        RD count(match[1].str(), defaultDice);
+        if (count.Roll() != 0) { rounds = 0; return; }
+        rounds = count.intTotal;
+        if (rounds > 10 || rounds < 1) return;
+        trimmedInput = trim(match[2].str());
     }
 
     // 分离表达式和原因
-    // 表达式包含：数字、d、D、+、-、*、/、(、)、b、B、p、P、k、K
-    std::regex exprRegex(R"(^([\d#dpbkDPBK+\-*/()\s]+)(.*)$)");
+    static const std::regex exprRegex(R"(^([\d#dfpbkDFPBKxX+\-*/()\s]+)(.*)$)");
 
     if (std::regex_match(trimmedInput, match, exprRegex)) {
         expression = trim(match[1].str());
@@ -117,15 +186,16 @@ void CommandProcessor::parseCheckExpression(
 ) {
     std::string expr = trim(input);
 
-    // 解析轮数和奖惩骰：3#b技能名 60
-    std::regex roundsRegex(R"(^(\d+)#([pb]?)(.+)$)", std::regex::icase);
+    std::regex roundsRegex(R"(^(\d+)#(.*)$)");
     std::smatch match;
-
     if (std::regex_match(expr, match, roundsRegex)) {
-        rounds = std::min(std::stoi(match[1].str()), 10);
-        std::string bonusType = match[2].str();
-        if (bonusType == "p" || bonusType == "P") bonusDice = -1;
-        else if (bonusType == "b" || bonusType == "B") bonusDice = 1;
+        rounds = std::stoi(match[1].str());
+        expr = trim(match[2].str());
+    }
+    std::regex bonusRegex(R"(^([pb])(\d*)(.*)$)", std::regex::icase);
+    if (std::regex_match(expr, match, bonusRegex)) {
+        int count = match[2].str().empty() ? 1 : std::stoi(match[2].str());
+        bonusDice = (match[1].str() == "p" || match[1].str() == "P") ? -count : count;
         expr = match[3].str();
     }
 
@@ -135,7 +205,8 @@ void CommandProcessor::parseCheckExpression(
     if (utf8StartsWith(expr, "自动成功")) {
         autoSuccess = true;
         expr = utf8RemovePrefix(expr, "自动成功");
-    } else if (utf8StartsWith(expr, "困难")) {
+    }
+    if (utf8StartsWith(expr, "困难")) {
         difficulty = Difficulty::Hard;
         expr = utf8RemovePrefix(expr, "困难");
     } else if (utf8StartsWith(expr, "极难")) {

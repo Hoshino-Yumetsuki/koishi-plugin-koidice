@@ -12,11 +12,17 @@ emscripten::val CheckHandler::check(
     int bonusDice,
     Difficulty difficulty,
     bool autoSuccess,
-    int rule
+    int rule,
+    emscripten::val suppliedRolls
 ) {
     emscripten::val result = emscripten::val::object();
 
     try {
+        if (rounds < 1 || rounds > 9 || bonusDice < -9 || bonusDice > 9) {
+            result.set("success", false);
+            result.set("errorMsg", "检定轮数及奖惩骰数量必须在1-9之间");
+            return result;
+        }
         // 验证技能值
         if (skillValue < 0 || skillValue > 1000) {
             result.set("success", false);
@@ -31,7 +37,8 @@ emscripten::val CheckHandler::check(
         emscripten::val results = emscripten::val::array();
 
         for (int i = 0; i < rounds; i++) {
-            CheckRoundResult roundResult = checkOnce(finalSkillValue, bonusDice, autoSuccess, rule);
+            int suppliedRoll = suppliedRolls.isUndefined() ? 0 : suppliedRolls[i].as<int>();
+            CheckRoundResult roundResult = checkOnce(finalSkillValue, bonusDice, autoSuccess, rule, suppliedRoll);
 
             emscripten::val jsRound = emscripten::val::object();
             jsRound.set("rollValue", roundResult.rollValue);
@@ -74,56 +81,13 @@ emscripten::val CheckHandler::cocCheck(int skillValue, int bonusDice) {
             return result;
         }
 
-        // 使用RD类的B/P骰子功能
-        std::string expression;
-        if (bonusDice > 0) {
-            expression = std::to_string(bonusDice) + "B";  // B = 奖励骰(Bonus)
-        } else if (bonusDice < 0) {
-            expression = std::to_string(-bonusDice) + "P"; // P = 惩罚骰(Penalty)
-        } else {
-            expression = "1D100";
-        }
-
-        RD rd(expression, 100);
-        int_errno err = rd.Roll();
-
-        if (err != 0) {
-            result.set("success", false);
-            result.set("rollValue", 0);
-            result.set("skillValue", skillValue);
-            result.set("successLevel", 0);
-            result.set("description", "掷骰失败");
-            result.set("errorMsg", getErrorMessage(err));
-            return result;
-        }
-
-        int rollValue = rd.intTotal;
-        int successLevel = 1; // 默认失败
-        std::string description = "失败";
-
-        // 判定成功等级
-        if (rollValue <= 5 || (rollValue <= skillValue && rollValue <= 5)) {
-            successLevel = 5; // 大成功
-            description = "大成功";
-        } else if (rollValue >= 96) {
-            successLevel = 0; // 大失败
-            description = "大失败";
-        } else if (rollValue <= skillValue / 5) {
-            successLevel = 4; // 极难成功
-            description = "极难成功";
-        } else if (rollValue <= skillValue / 2) {
-            successLevel = 3; // 困难成功
-            description = "困难成功";
-        } else if (rollValue <= skillValue) {
-            successLevel = 2; // 成功
-            description = "成功";
-        }
-
-        result.set("success", true);
-        result.set("rollValue", rollValue);
+        if (bonusDice < -9 || bonusDice > 9) throw std::invalid_argument("奖惩骰数量超过限制");
+        const auto roll = checkOnce(skillValue, bonusDice, false, 0, 0);
+        result.set("success", roll.rollValue != 0);
+        result.set("rollValue", roll.rollValue);
         result.set("skillValue", skillValue);
-        result.set("successLevel", successLevel);
-        result.set("description", description);
+        result.set("successLevel", static_cast<int>(roll.successLevel));
+        result.set("description", roll.description);
 
     } catch (const std::exception& e) {
         result.set("success", false);
@@ -148,7 +112,8 @@ CheckRoundResult CheckHandler::checkOnce(
     int skillValue,
     int bonusDice,
     bool autoSuccess,
-    int rule
+    int rule,
+    int suppliedRoll
 ) {
     CheckRoundResult result;
     result.skillValue = skillValue;
@@ -156,15 +121,15 @@ CheckRoundResult CheckHandler::checkOnce(
     // 使用RD类的B/P骰子功能
     std::string expression;
     if (bonusDice > 0) {
-        expression = std::to_string(bonusDice) + "B";
+        expression = "B" + std::to_string(bonusDice);
     } else if (bonusDice < 0) {
-        expression = std::to_string(-bonusDice) + "P";
+        expression = "P" + std::to_string(-bonusDice);
     } else {
         expression = "1D100";
     }
 
     RD rd(expression, 100);
-    int_errno err = rd.Roll();
+    int_errno err = suppliedRoll > 0 ? 0 : rd.Roll();
 
     if (err != 0) {
         result.rollValue = 0;
@@ -173,12 +138,22 @@ CheckRoundResult CheckHandler::checkOnce(
         return result;
     }
 
-    result.rollValue = rd.intTotal;
+    result.rollValue = suppliedRoll > 0 ? suppliedRoll : rd.intTotal;
+    if (suppliedRoll > 0 && bonusDice != 0) {
+        int units = suppliedRoll % 10;
+        int tens = suppliedRoll / 10;
+        for (int i = 0; i < std::abs(bonusDice); ++i) {
+            RD extra("1D10", 10);
+            if (extra.Roll() != 0) break;
+            int candidate = units == 0 ? extra.intTotal : extra.intTotal - 1;
+            if ((bonusDice > 0 && candidate < tens) || (bonusDice < 0 && candidate > tens)) tens = candidate;
+        }
+        result.rollValue = tens * 10 + units;
+    }
 
     // 使用Dice的RollSuccessLevel函数判定
-    SuccessLevel level = autoSuccess && result.rollValue <= skillValue
-        ? SuccessLevel::RegularSuccess
-        : static_cast<SuccessLevel>(RollSuccessLevel(result.rollValue, skillValue, rule));
+    SuccessLevel level = static_cast<SuccessLevel>(RollSuccessLevel(result.rollValue, skillValue, rule));
+    if (autoSuccess && level == SuccessLevel::Failure) level = SuccessLevel::RegularSuccess;
 
     result.successLevel = level;
     result.description = getSuccessLevelDesc(static_cast<int>(level), autoSuccess);

@@ -3,7 +3,7 @@
 #include "../core/roll_handler.h"
 #include "../core/check_handler.h"
 #include "../features/rule.h"
-#include <quickjs.h>
+#include "quickjs.h"
 #include <stdexcept>
 #include <cstring>
 #include <emscripten/val.h>
@@ -203,6 +203,9 @@ void JSExtension::initJSRuntime() {
     if (!rt) {
         throw std::runtime_error("Failed to create QuickJS runtime");
     }
+    JS_SetInterruptHandler(rt, [](JSRuntime*, void* opaque) -> int {
+        return --*static_cast<int*>(opaque) <= 0;
+    }, &instructionBudget);
 
     ctx = JS_NewContext(rt);
     if (!ctx) {
@@ -261,21 +264,16 @@ bool JSExtension::loadScript(const std::string& name, const std::string& code) {
         return false;
     }
 
-    // 编译并执行脚本
+    instructionBudget = 1000;
     JSValue result = JS_Eval(ctx, code.c_str(), code.length(), name.c_str(),
-                             JS_EVAL_TYPE_GLOBAL);
+                             JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY);
 
     if (JS_IsException(result)) {
         lastError = getException();
         return false;
     }
 
-    // 检查返回值是否为函数
-    if (!JS_IsFunction(ctx, result)) {
-        lastError = "Script must evaluate to a function";
-        JS_FreeValue(ctx, result);
-        return false;
-    }
+    // The compiled script is evaluated only when the named reply is invoked.
 
     // 保存到脚本注册表
     JSValue global = JS_GetGlobalObject(ctx);
@@ -305,17 +303,27 @@ std::string JSExtension::execute(const std::string& name, const AttrObject& cont
     JSValue func = JS_GetPropertyStr(ctx, registry, name.c_str());
     JS_FreeValue(ctx, registry);
 
-    if (!JS_IsFunction(ctx, func)) {
+    if (JS_IsUndefined(func)) {
         JS_FreeValue(ctx, func);
         JS_FreeValue(ctx, global);
         return "[Error] Script function not found";
     }
 
     // 转换 context 为 JS 对象
+    instructionBudget = 1000;
     JSValue contextObj = pushAttrObject(context);
 
     // 调用函数
-    JSValue result = JS_Call(ctx, func, global, 1, &contextObj);
+    JS_SetPropertyStr(ctx, global, "msg", JS_DupValue(ctx, contextObj));
+    JS_SetPropertyStr(ctx, global, "event", JS_GetPropertyStr(ctx, contextObj, "event"));
+    JSValue result = JS_EvalFunction(ctx, JS_DupValue(ctx, func));
+    if (JS_IsFunction(ctx, result)) {
+        JSValue callable = result;
+        result = JS_Call(ctx, callable, global, 1, &contextObj);
+        JS_FreeValue(ctx, callable);
+    }
+    JS_SetPropertyStr(ctx, global, "msg", JS_UNDEFINED);
+    JS_SetPropertyStr(ctx, global, "event", JS_UNDEFINED);
     JS_FreeValue(ctx, func);
     JS_FreeValue(ctx, contextObj);
     JS_FreeValue(ctx, global);

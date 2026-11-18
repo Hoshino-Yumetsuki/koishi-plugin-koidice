@@ -2,7 +2,6 @@
 #include "../core/utils.h"
 #include "../core/utf8_utils.h"
 #include <regex>
-#include <unordered_map>
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -10,64 +9,24 @@
 
 namespace koidice {
 
-// 属性名称同义词映射（全小写）
-static const std::unordered_map<std::string, std::string> ATTRIBUTE_ALIASES = {
-    // COC7 属性
-    {"str", "力量"},
-    {"力量", "力量"},
-    {"strength", "力量"},
-    {"con", "体质"},
-    {"体质", "体质"},
-    {"constitution", "体质"},
-    {"siz", "体型"},
-    {"体型", "体型"},
-    {"size", "体型"},
-    {"dex", "敏捷"},
-    {"敏捷", "敏捷"},
-    {"dexterity", "敏捷"},
-    {"app", "外貌"},
-    {"外貌", "外貌"},
-    {"appearance", "外貌"},
-    {"int", "智力"},
-    {"智力", "智力"},
-    {"intelligence", "智力"},
-    {"pow", "意志"},
-    {"意志", "意志"},
-    {"power", "意志"},
-    {"edu", "教育"},
-    {"教育", "教育"},
-    {"education", "教育"},
-    {"luck", "幸运"},
-    {"幸运", "幸运"},
-    {"luk", "幸运"},
-    {"san", "理智"},
-    {"理智", "理智"},
-    {"sanity", "理智"},
-    {"hp", "生命"},
-    {"生命", "生命"},
-    {"生命值", "生命"},
-    {"mp", "魔法"},
-    {"魔法", "魔法"},
-    {"魔法值", "魔法"},
-    {"db", "伤害加值"},
-    {"伤害加值", "伤害加值"},
-    {"伤害奖励", "伤害加值"},
-    {"mov", "移动力"},
-    {"移动力", "移动力"},
-    {"move", "移动力"}
-};
-
 std::string normalizeAttributeName(const std::string& name) {
-    std::string lower = name;
-    std::transform(lower.begin(), lower.end(), lower.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-
-    // 去除空格
-    lower.erase(std::remove_if(lower.begin(), lower.end(), ::isspace), lower.end());
-
-    auto it = ATTRIBUTE_ALIASES.find(lower);
-    if (it != ATTRIBUTE_ALIASES.end()) {
-        return it->second;
+    const auto key = trim(name);
+    // These keys are stored in Koishi cards (including cards from custom templates).
+    // Do not apply the entire COC skill table: e.g. 体力 may be distinct from 生命.
+    static const dict_ci<> extra = {
+        {"strength", "力量"}, {"constitution", "体质"}, {"size", "体型"},
+        {"dexterity", "敏捷"}, {"appearance", "外貌"}, {"intelligence", "智力"},
+        {"power", "意志"}, {"education", "教育"}, {"sanity", "理智"},
+        {"生命值", "生命"}, {"魔法值", "魔法"}, {"db", "伤害加值"},
+        {"伤害奖励", "伤害加值"}, {"move", "移动力"}, {"灵感", "智力"}, {"侦查", "侦察"}
+    };
+    if (const auto it = extra.find(key); it != extra.end()) return it->second;
+    if (const auto it = SkillNameReplace.find(key); it != SkillNameReplace.end()) {
+        // Only the built-in attribute abbreviations are shared across card types.
+        static const std::unordered_set<std::string> attributes = {
+            "力量", "体质", "体型", "敏捷", "外貌", "智力", "意志", "教育", "幸运", "理智", "生命", "魔法", "移动力"
+        };
+        if (!key.empty() && static_cast<unsigned char>(key.front()) < 128 && attributes.count(it->second)) return it->second;
     }
     return name;
 }

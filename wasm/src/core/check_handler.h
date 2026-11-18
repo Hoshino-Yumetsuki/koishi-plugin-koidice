@@ -29,7 +29,8 @@ public:
         int bonusDice,
         Difficulty difficulty,
         bool autoSuccess,
-        int rule
+        int rule,
+        emscripten::val suppliedRolls = emscripten::val::undefined()
     );
 
     /**
@@ -48,7 +49,8 @@ private:
         int skillValue,
         int bonusDice,
         bool autoSuccess,
-        int rule
+        int rule,
+        int suppliedRoll
     );
 };
 

@@ -18,29 +18,6 @@ void ensureRandomInit() {
     }
 }
 
-int getSecureRandomInt(int min, int max) {
-    if (min > max) {
-        std::swap(min, max);
-    }
-
-    if (min == max) {
-        return min;
-    }
-
-    // node crypto: crypto.getRandomValues()
-    val crypto = val::global("crypto");
-    val uint32Array = val::global("Uint32Array").new_(1);
-    crypto.call<void>("getRandomValues", uint32Array);
-    unsigned int randomValue = uint32Array[0].as<unsigned int>();
-
-    // 无偏映射算法
-    unsigned int range = max - min + 1;
-    unsigned long long product = static_cast<unsigned long long>(randomValue) * range;
-    unsigned int result = product >> 32; // 取高32位
-
-    return min + result;
-}
-
 std::string getErrorMessage(int_errno err) {
     switch (err) {
         case Value_Err: return "数值错误";
@@ -104,8 +81,6 @@ val skillCheck(const std::string& expression, int rule) {
     val result = val::object();
 
     try {
-        // 解析表达式格式: "rollValue/skillValue" 或 "skillName skillValue"
-        std::istringstream iss(expression);
         std::string part1, part2;
 
         // 尝试用 / 分割
@@ -118,34 +93,9 @@ val skillCheck(const std::string& expression, int rule) {
             int rollValue = std::stoi(trim(part1));
             int skillValue = std::stoi(trim(part2));
 
-            // 计算成功等级
-            int successLevel = 1; // 默认失败
-
-            // 大成功判定
-            if (rollValue <= 5 && rollValue <= skillValue) {
-                successLevel = 5;
-            }
-            // 大失败判定
-            else if (rollValue == 100 || (rollValue > 95 && rollValue > skillValue)) {
-                successLevel = 0;
-            }
-            // 失败
-            else if (rollValue > skillValue) {
-                successLevel = 1;
-            }
-            // 成功等级判定
-            else {
-                int hardThreshold = skillValue / 2;
-                int extremeThreshold = skillValue / 5;
-
-                if (rollValue <= extremeThreshold) {
-                    successLevel = 4; // 极难成功
-                } else if (rollValue <= hardThreshold) {
-                    successLevel = 3; // 困难成功
-                } else {
-                    successLevel = 2; // 成功
-                }
-            }
+            if (rollValue < 1 || rollValue > 100 || skillValue < 0 || skillValue > 1000 || rule < 0 || rule > 7)
+                throw std::invalid_argument("检定点数、成功率或房规无效");
+            const int successLevel = static_cast<int>(RollSuccessLevel(rollValue, skillValue, rule));
 
             // 构建结果
             val results = val::array();

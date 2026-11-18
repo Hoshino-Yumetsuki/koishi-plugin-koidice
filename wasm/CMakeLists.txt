@@ -61,9 +61,8 @@ if(EMSCRIPTEN)
         -s NO_DISABLE_EXCEPTION_CATCHING
         -s NO_EXIT_RUNTIME=1
         -s INITIAL_MEMORY=33554432
-        -s ERROR_ON_UNDEFINED_SYMBOLS=0
         --no-entry
-        -Wl,--allow-undefined
+        -Wl,--gc-sections
     )
 
     # Optimization options
@@ -94,7 +93,7 @@ list(FILTER LUA_SOURCES EXCLUDE REGEX ".*/ltests\\.c$")  # Test file
 # that is not compatible with WASM (environ, sighandler_t, etc.)
 set(QUICKJS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/quickjs.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/libbf.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/dtoa.c
     ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/libregexp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/libunicode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS/cutils.c
@@ -126,7 +125,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/simdutf EXCLUDE_FROM_ALL)
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../Dice/Dice
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Dice/quickjspp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Dice/QQAPI
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/yaml-cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/tinyxml2
@@ -134,7 +133,6 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/libzip/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/include/curl/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/lua
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/zlib
 )
 
@@ -156,18 +154,17 @@ set(DICE_CORE_SOURCES
     ../Dice/Dice/CardDeck.cpp
     ../Dice/Dice/CharacterCard.cpp
 
-    # Formatting
-    ../Dice/Dice/DiceFormatter.cpp
-    ../Dice/Dice/MsgFormat.cpp
+    # Link chatInfo serialization, not the QQ driver. --gc-sections drops SendMsg.
+    ../Dice/Dice/DiceMsgSend.cpp
+    src/platform/msg_format.cpp
+    src/platform/dice_dir.cpp
 
     # JSON processing
     ../Dice/Dice/Jsonio.cpp
+    ../Dice/Dice/EncodingConvert.cpp
 
     # File operations (simplified)
     ../Dice/Dice/DiceFile.cpp
-
-    # Deck system
-    ../Dice/Dice/CardDeck.cpp
 
     # Global variables (including rule data)
     ../Dice/Dice/GlobalVar.cpp
@@ -202,11 +199,12 @@ set(WASM_SOURCES
 
 # Create WASM library
 add_executable(dice ${DICE_CORE_SOURCES} ${WASM_SOURCES} ${LUA_SOURCES} ${QUICKJS_SOURCES})
+# QuickJS ships a VERSION file that shadows libc++ <version> on Windows.
+target_compile_options(dice PRIVATE "SHELL:-iquote ${CMAKE_CURRENT_SOURCE_DIR}/include/QuickJS")
 
 # Set compile definitions
 target_compile_definitions(dice PRIVATE
     DICE_WASM_BUILD
-    CONFIG_BIGNUM
     _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
     # Lua definitions
     LUA_USE_POSIX
@@ -214,7 +212,7 @@ target_compile_definitions(dice PRIVATE
     # QuickJS checks EMSCRIPTEN (without the compiler's leading underscores).
     EMSCRIPTEN
     # QuickJS definitions
-    CONFIG_VERSION="2021-03-27"
+    CONFIG_VERSION="2025-04-26"
     JS_STRICT_NAN_BOXING
 )
 
@@ -234,7 +232,7 @@ if(EMSCRIPTEN)
     )
 
     # Set compile options
-    target_compile_options(dice PRIVATE -fexceptions)
+    target_compile_options(dice PRIVATE -fexceptions -ffunction-sections -fdata-sections)
 
     # Output build information
     message(STATUS "=== Dice WASM Build Configuration ===")

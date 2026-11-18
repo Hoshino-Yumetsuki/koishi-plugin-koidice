@@ -153,6 +153,14 @@ export class DiceAdapter {
     return module.processRoll(rawCommand, userId, channelId, isHidden, isSimple, defaultDice);
   }
 
+  processTableRoll(command: string, hidden: boolean, simple: boolean, defaultDice: number, roulette: string) {
+    return this.ensureModule().processTableRoll(command, hidden, simple, defaultDice, roulette);
+  }
+
+  drawRouletteBatch(roulette: string, faces: number[]) {
+    return this.ensureModule().drawRouletteBatch(roulette, faces);
+  }
+
   /**
    * 处理检定命令（新架构，C++完成所有解析）
    * @param rawCommand 原始命令字符串
@@ -162,6 +170,10 @@ export class DiceAdapter {
   processCheck(rawCommand: string, userId: string, rule = 0) {
     const module = this.ensureModule();
     return module.processCheck(rawCommand, userId, rule);
+  }
+
+  processCheckWithRolls(rawCommand: string, userId: string, rule: number, rolls: number[]) {
+    return this.ensureModule().processCheckWithRolls(rawCommand, userId, rule, rolls);
   }
 
   /**
@@ -283,6 +295,18 @@ export class DiceAdapter {
   deckExists(deckName: string): boolean {
     const module = this.ensureModule();
     return module.deckExists(deckName);
+  }
+
+  getPublicDeck(deckName: string): string[] | null {
+    return this.ensureModule().getPublicDeck(deckName);
+  }
+
+  isBuiltinDeck(deckName: string): boolean {
+    return this.ensureModule().isBuiltinDeck(deckName);
+  }
+
+  resolveDeckCard(card: string): string {
+    return this.ensureModule().resolveDeckCard(card);
   }
 
   // ============ 规则查询功能 ============
@@ -410,6 +434,10 @@ export class DiceAdapter {
     return module.normalizeAttributeName(name);
   }
 
+  defaultSkillValue(name: string): number {
+    return this.ensureModule().defaultSkillValue(name);
+  }
+
   /**
    * 解析 .st 命令参数
    * @param input 输入字符串
@@ -444,12 +472,16 @@ export class DiceAdapter {
    * @param successLoss 成功时损失表达式 (如 "0" 或 "1")
    * @param failureLoss 失败时损失表达式 (如 "1d6" 或 "1d10")
    */
-  sanityCheck(currentSan: number, successLoss: string, failureLoss: string): SanityCheckResult {
+  sanityCheck(currentSan: number, successLoss: string, failureLoss: string, rule = 0, suppliedRoll = 0): SanityCheckResult {
     const module = this.ensureModule();
-    return module.sanityCheck(currentSan, successLoss, failureLoss);
+    return module.sanityCheckWithRule(currentSan, successLoss, failureLoss, rule, suppliedRoll);
   }
 
   // ============ 疯狂症状功能 ============
+
+  generateInsanity(temporary: boolean) {
+    return this.ensureModule().generateInsanity(temporary);
+  }
 
   /**
    * 获取临时疯狂症状

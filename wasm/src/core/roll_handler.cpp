@@ -11,7 +11,8 @@ emscripten::val RollHandler::roll(
     int rounds,
     bool isHidden,
     bool isSimple,
-    int defaultDice
+    int defaultDice,
+    const std::shared_ptr<DiceSession>& game
 ) {
     emscripten::val result = emscripten::val::object();
     emscripten::val results = emscripten::val::array();
@@ -19,7 +20,7 @@ emscripten::val RollHandler::roll(
     try {
         // 执行多轮掷骰
         for (int i = 0; i < rounds; i++) {
-            RollResult rollResult = rollOnce(expression, defaultDice);
+            RollResult rollResult = rollOnce(expression, defaultDice, game);
 
             if (rollResult.errorCode != 0) {
                 result.set("success", false);
@@ -53,16 +54,16 @@ emscripten::val RollHandler::roll(
     return result;
 }
 
-RollResult RollHandler::rollOnce(const std::string& expression, int defaultDice) {
+RollResult RollHandler::rollOnce(const std::string& expression, int defaultDice, const std::shared_ptr<DiceSession>& game) {
     RollResult result;
 
     try {
         RD rd(expression, defaultDice);
-        int_errno err = rd.Roll();
+        int_errno err = rd.Roll(game);
 
         result.total = rd.intTotal;
         result.expression = rd.strDice;
-        result.detail = rd.FormCompleteString();
+        result.detail = err == 0 ? rd.FormCompleteString() : "";
         result.errorCode = err;
         result.errorMsg = err != 0 ? getErrorMessage(err) : "";
 

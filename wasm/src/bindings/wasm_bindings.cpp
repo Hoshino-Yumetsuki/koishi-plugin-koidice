@@ -63,7 +63,10 @@ bool initialize() {
 EMSCRIPTEN_BINDINGS(dice_module) {
     // === 核心命令处理 ===
     function("processRoll", &CommandProcessor::processRoll);
+    function("processTableRoll", &CommandProcessor::processTableRoll);
+    function("drawRouletteBatch", &CommandProcessor::drawRouletteBatch);
     function("processCheck", &CommandProcessor::processCheck);
+    function("processCheckWithRolls", &CommandProcessor::processCheckWithRolls);
     function("processCOCCheck", &CommandProcessor::processCOCCheck);
 
     // === 基础掷骰 ===
@@ -85,6 +88,8 @@ EMSCRIPTEN_BINDINGS(dice_module) {
 
     // === 理智检定 ===
     function("sanityCheck", &sanityCheck);
+    function("sanityCheckWithRule", &koidice::sanityCheckWithRule);
+    function("generateInsanity", &koidice::generateInsanity);
     function("getTempInsanity", &getTempInsanity);
     function("getLongInsanity", &getLongInsanity);
     function("getPhobia", &getPhobia);
@@ -107,6 +112,9 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     function("listDecks", &listDecks);
     function("getDeckSize", &getDeckSize);
     function("deckExists", &deckExists);
+    function("getPublicDeck", &getPublicDeck);
+    function("isBuiltinDeck", &isBuiltinDeck);
+    function("resolveDeckCard", &resolveDeckCard);
 
     // === 规则查询 ===
     function("queryRule", &queryRule);
@@ -117,6 +125,12 @@ EMSCRIPTEN_BINDINGS(dice_module) {
     // === 人物卡解析 ===
     function("parseCOCAttributes", &parseCOCAttributes);
     function("normalizeAttributeName", &koidice::normalizeAttributeName);
+    function("defaultSkillValue", optional_override([](const std::string& name) {
+        if (name.empty() || name.front() == '_') return -1;
+        const auto alias = SkillNameReplace.find(name);
+        const auto entry = SkillDefaultVal.find(alias == SkillNameReplace.end() ? name : alias->second);
+        return entry == SkillDefaultVal.end() ? -1 : entry->second;
+    }));
     function("parseStCommand", &koidice::parseStCommand);
     function("parseAttributeList", &koidice::parseAttributeList);
 

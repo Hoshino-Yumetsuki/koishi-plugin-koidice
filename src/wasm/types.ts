@@ -119,6 +119,7 @@ export interface CommandResult {
   isHidden?: boolean;
   isSimple?: boolean;
   errorMsg?: string;
+  roulette?: string;
 }
 
 export interface ExtensionDataEntry {
@@ -151,7 +152,10 @@ export interface DiceModule {
     isSimple?: boolean,
     defaultDice?: number
   ): CommandResult;
+  processTableRoll(command: string, hidden: boolean, simple: boolean, defaultDice: number, roulette: string): CommandResult;
+  drawRouletteBatch(roulette: string, faces: number[]): { rolls: (number | undefined)[]; roulette?: string };
   processCheck(rawCommand: string, userId: string, rule?: number): any;
+  processCheckWithRolls(rawCommand: string, userId: string, rule: number, rolls: number[]): SkillCheckResult & { success: boolean };
   processCOCCheck(skillValue: number, bonusDice?: number): COCCheckResult;
 
   // === 旧接口（保持兼容） ===
@@ -174,6 +178,7 @@ export interface DiceModule {
   // 人物卡解析功能
   parseCOCAttributes(input: string): string;
   normalizeAttributeName(name: string): string;
+  defaultSkillValue(name: string): number;
   parseStCommand(input: string): {
     cardName?: string;
     operations: Array<{ attr: string; op: string; value: number }>;
@@ -185,8 +190,10 @@ export interface DiceModule {
 
   // 理智检定功能
   sanityCheck(currentSan: number, successLoss: string, failureLoss: string): SanityCheckResult;
+  sanityCheckWithRule(currentSan: number, successLoss: string, failureLoss: string, rule: number, suppliedRoll: number): SanityCheckResult;
 
   // 疯狂症状功能
+  generateInsanity(temporary: boolean): { symptom: string; duration: string; detailRoll: string; detail: string };
   getTempInsanity(index: number): string;
   getLongInsanity(index: number): string;
   getPhobia(index: number): string;
@@ -208,6 +215,9 @@ export interface DiceModule {
   shuffleDeck(deckName: string, count?: number): DeckDrawResult;
   listDecks(): string;
   getDeckSize(deckName: string): number;
+  getPublicDeck(deckName: string): string[] | null;
+  isBuiltinDeck(deckName: string): boolean;
+  resolveDeckCard(card: string): string;
   deckExists(deckName: string): boolean;
 
   // 规则查询功能

@@ -17,6 +17,10 @@ namespace extensions {
         return luaL_error(L, "Expected at least %d arguments", n); \
     }
 
+static void lua_instruction_limit(lua_State* L, lua_Debug*) {
+    luaL_error(L, "extension instruction limit exceeded");
+}
+
 // ============ Lua API 函数 ============
 
 // dice.roll(expression[, defaultDice])
@@ -198,6 +202,10 @@ void LuaExtension::initLuaState() {
 
     // 打开标准库（精简版）
     luaL_openlibs(L);
+    for (const char* name : {"io", "os", "package", "debug", "dofile", "loadfile", "require", "load", "pcall", "xpcall", "coroutine"}) {
+        lua_pushnil(L);
+        lua_setglobal(L, name);
+    }
 
     // 注册 dice API
     registerDiceAPI();
@@ -263,7 +271,9 @@ bool LuaExtension::loadScript(const std::string& name, const std::string& code, 
     }
 
     // 执行脚本（应返回一个函数）
+    lua_sethook(L, lua_instruction_limit, LUA_MASKCOUNT, 1000000);
     int callResult = lua_pcall(L, 0, 1, 0);
+    lua_sethook(L, nullptr, 0, 0);
     if (callResult != LUA_OK) {
         lastError = lua_tostring(L, -1);
         lua_pop(L, 1);
@@ -316,7 +326,9 @@ std::string LuaExtension::execute(const std::string& name, const AttrObject& con
     pushAttrObject(context);
 
     // 调用函数
+    lua_sethook(L, lua_instruction_limit, LUA_MASKCOUNT, 1000000);
     int callResult = lua_pcall(L, 1, 1, 0);
+    lua_sethook(L, nullptr, 0, 0);
     if (callResult != LUA_OK) {
         lastError = lua_tostring(L, -1);
         lua_pop(L, 1);

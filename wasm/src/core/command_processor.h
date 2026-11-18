@@ -35,6 +35,8 @@ public:
         bool isSimple = false,
         int defaultDice = 100
     );
+    static emscripten::val processTableRoll(const std::string& command, bool hidden, bool simple, int defaultDice, const std::string& roulette);
+    static emscripten::val drawRouletteBatch(const std::string& roulette, emscripten::val faces);
 
     /**
      * 处理技能检定命令
@@ -56,6 +58,7 @@ public:
         const std::string& userId,
         int rule = 0
     );
+    static emscripten::val processCheckWithRolls(const std::string& rawCommand, const std::string& userId, int rule, emscripten::val rolls);
 
     /**
      * 处理COC检定命令（简化版）

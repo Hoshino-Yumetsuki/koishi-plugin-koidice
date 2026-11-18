@@ -49,6 +49,7 @@ private:
     JSRuntime* rt;
     JSContext* ctx;
     std::map<std::string, Script> scripts;
+    int instructionBudget = 0;
     std::string lastError;
 
     // 初始化 JS 运行时

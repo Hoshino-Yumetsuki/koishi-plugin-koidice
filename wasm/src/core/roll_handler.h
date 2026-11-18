@@ -1,7 +1,10 @@
 #pragma once
 #include <string>
+#include <memory>
 #include <emscripten/val.h>
 #include "../types/common_types.h"
+
+class DiceSession;
 
 namespace koidice {
 
@@ -27,13 +30,14 @@ public:
         int rounds,
         bool isHidden,
         bool isSimple,
-        int defaultDice
+        int defaultDice,
+        const std::shared_ptr<DiceSession>& game = {}
     );
 
     /**
      * 单次掷骰（内部使用）
      */
-    static RollResult rollOnce(const std::string& expression, int defaultDice);
+    static RollResult rollOnce(const std::string& expression, int defaultDice, const std::shared_ptr<DiceSession>& game = {});
 };
 
 } // namespace koidice
